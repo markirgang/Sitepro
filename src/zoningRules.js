@@ -74,6 +74,24 @@ export function getZoningRules(district, overlay = "") {
   if (!district) return null;
 
   const upperDistrict = district.trim().toUpperCase();
+  
+  const isNycFormat = /^[RCM][0-9]/.test(upperDistrict);
+  if (!isNycFormat || upperDistrict.includes('GENERIC') || upperDistrict.includes('NON-NYC')) {
+    return {
+      district: upperDistrict,
+      type: 'Mixed Use',
+      resFar: 2.50,
+      commFar: 2.00,
+      facilFar: 2.00,
+      mfgFar: 0,
+      contextual: true,
+      baseHeight: 45,
+      maxBuildingHeight: 75,
+      ihFar: null,
+      skyExposurePlaneSlope: 2.7
+    };
+  }
+
   const baseType = upperDistrict.charAt(0); // R, C, or M
   
   // 1. Start with defaults for the category

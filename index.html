@@ -70,14 +70,22 @@
           <span class="search-icon">🔍</span>
           <input type="text" id="site-search-input" class="search-input" 
                  placeholder="Search address or BBL (e.g. 350 Fifth Ave)..." autocomplete="off">
+          <button id="save-location-btn" class="save-location-btn" title="Save this location" style="display: none;">⭐</button>
         </div>
         <!-- Autocomplete Suggestions Dropdown -->
         <div id="autocomplete-dropdown" class="autocomplete-dropdown"></div>
       </section>
+
+      <!-- Saved Locations Section -->
+      <div id="saved-locations-container" class="saved-locations-container" style="display: none;">
+        <div class="saved-title">Saved Sites</div>
+        <div id="saved-locations-list" class="saved-locations-list"></div>
+      </div>
       
       <!-- Tab Navigation Section -->
       <nav class="sidebar-tabs" id="sidebar-tabs" style="display: none;">
         <button class="tab-btn active" data-tab="zoning">Zoning & Massing</button>
+        <button class="tab-btn" data-tab="contacts">Contact Logs</button>
         <button class="tab-btn" data-tab="financials">Financial Underwriting</button>
       </nav>
       
@@ -85,8 +93,8 @@
       <div id="report-panel" class="report-content">
         <div class="welcome-screen">
           <div class="welcome-icon">🏙️</div>
-          <h3>NYC Zoning Analysis</h3>
-          <p>Search for a New York City property address, or input a 10-digit Borough-Block-Lot (BBL) identifier to generate a custom zoning and massing report.</p>
+          <h3>Zoning & Underwriting Analysis</h3>
+          <p>Search for any property address in the United States, or input a 10-digit NYC Borough-Block-Lot (BBL) identifier to generate a custom zoning, 3D massing, and proforma report.</p>
         </div>
       </div>
     </aside>

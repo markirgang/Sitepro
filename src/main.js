@@ -198,6 +198,188 @@ function getLocalCoordinates(lon, lat, centerLon, centerLat) {
   return { x, y };
 }
 
+function isCoordinatesInNYC(lat, lon) {
+  return lat >= 40.49 && lat <= 40.92 && lon >= -74.26 && lon <= -73.69;
+}
+
+function formatPhotonLabel(props) {
+  const parts = [];
+  let mainName = props.name || '';
+  const houseNum = props.housenumber || '';
+  const street = props.street || '';
+  
+  let addressLine = '';
+  if (houseNum && street) {
+    addressLine = `${houseNum} ${street}`;
+  } else if (street) {
+    addressLine = street;
+  } else {
+    addressLine = mainName;
+  }
+  
+  if (mainName && mainName !== houseNum && mainName !== street && mainName !== addressLine) {
+    parts.push(mainName);
+  }
+  if (addressLine) {
+    parts.push(addressLine);
+  }
+  
+  const city = props.city || props.town || props.village || '';
+  const state = props.state || '';
+  const postcode = props.postcode || '';
+  const country = props.country || '';
+  
+  const locationParts = [];
+  if (city) locationParts.push(city);
+  if (state) locationParts.push(state);
+  if (postcode) locationParts.push(postcode);
+  if (country && country !== 'United States') locationParts.push(country);
+  
+  if (locationParts.length > 0) {
+    parts.push(locationParts.join(', '));
+  }
+  
+  return parts.join(', ');
+}
+
+function getLocalGovernmentAgencies(address, city, state, postcode) {
+  const cleanCity = (city || '').trim();
+  const cleanState = (state || '').trim();
+  const addressQuery = encodeURIComponent(address || '');
+  
+  // NYC case
+  if (cleanCity === 'New York' || cleanState === 'NY' || cleanCity === 'Brooklyn' || cleanCity === 'Queens' || cleanCity === 'Bronx' || cleanCity === 'Staten Island') {
+    // Parse BBL components
+    const bblStr = String(currentBBL || plutoData.bbl || '').split('.')[0];
+    const boro = bblStr.substring(0, 1);
+    const block = String(parseInt(bblStr.substring(1, 6), 10) || '');
+    const lot = String(parseInt(bblStr.substring(6, 10), 10) || '');
+    return {
+      building: {
+        name: "NYC DOB (BIS)",
+        url: boro && block && lot 
+          ? `https://a810-bisweb.nyc.gov/bisweb/PropertyBrowseByBBLServlet?allborough=${boro}&allblock=${block}&alllot=${lot}&go5=%2BGO%2B&requestid=0`
+          : `https://www.google.com/search?q=site:a810-bisweb.nyc.gov+OR+site:nyc.gov/site/buildings+"${addressQuery}"`
+      },
+      housing: {
+        name: "NYC HPD Online",
+        url: `https://hpdonline.nyc.gov/hpdonline/select-property?address=${addressQuery}`
+      },
+      planning: {
+        name: "NYC DCP (ZoLa)",
+        url: `https://zola.planning.nyc.gov/about#12/${40.7128}/${-74.0060}`
+      }
+    };
+  }
+
+  // Los Angeles case
+  if (cleanCity === 'Los Angeles' || cleanState === 'CA') {
+    return {
+      building: {
+        name: "LADBS (Permit Search)",
+        url: `https://www.google.com/search?q=site:ladbstransactions.lacity.org+OR+site:ladbs.org+"${addressQuery}"`
+      },
+      housing: {
+        name: "LA Housing Dept (LAHD)",
+        url: `https://www.google.com/search?q=site:housing.lacity.org+"${addressQuery}"`
+      },
+      planning: {
+        name: "LA City Planning (ZIMAS)",
+        url: `https://www.google.com/search?q=site:zimas.lacity.org+OR+site:planning.lacity.org+"${addressQuery}"`
+      }
+    };
+  }
+
+  // Chicago case
+  if (cleanCity === 'Chicago' || cleanState === 'IL') {
+    return {
+      building: {
+        name: "Chicago Dept of Buildings",
+        url: `https://www.google.com/search?q=site:chicago.gov/city/en/depts/bldgs+"${addressQuery}"`
+      },
+      housing: {
+        name: "Chicago Dept of Housing",
+        url: `https://www.google.com/search?q=site:chicago.gov/city/en/depts/doh+"${addressQuery}"`
+      },
+      planning: {
+        name: "Chicago Planning & Zoning",
+        url: `https://www.google.com/search?q=site:chicago.gov/city/en/depts/dcd+OR+site:gisapps.chicago.gov+"${addressQuery}"`
+      }
+    };
+  }
+
+  // Miami case
+  if (cleanCity === 'Miami' || cleanState === 'FL' || cleanCity === 'Miami-Dade') {
+    return {
+      building: {
+        name: "Miami-Dade RER Building",
+        url: `https://www.google.com/search?q=site:miamidade.gov/building+OR+site:miamigov.com/building+"${addressQuery}"`
+      },
+      housing: {
+        name: "Miami-Dade Housing Authority",
+        url: `https://www.google.com/search?q=site:miamidade.gov/housing+OR+site:miamigov.com/housing+"${addressQuery}"`
+      },
+      planning: {
+        name: "Miami Planning & Zoning",
+        url: `https://www.google.com/search?q=site:miamigov.com/Government/Departments-Organizations/Planning-Zoning+"${addressQuery}"`
+      }
+    };
+  }
+
+  // Houston case
+  if (cleanCity === 'Houston' || cleanState === 'TX') {
+    return {
+      building: {
+        name: "Houston Permitting Center",
+        url: `https://www.google.com/search?q=site:houstonpermittingcenter.org+OR+site:houstontx.gov+"${addressQuery}"`
+      },
+      housing: {
+        name: "Houston Housing & Dev",
+        url: `https://www.google.com/search?q=site:houstontx.gov/housing+"${addressQuery}"`
+      },
+      planning: {
+        name: "Houston Planning & Zoning",
+        url: `https://www.google.com/search?q=site:houstontx.gov/planning+"${addressQuery}"`
+      }
+    };
+  }
+
+  // San Francisco case
+  if (cleanCity === 'San Francisco' || cleanState === 'CA') {
+    return {
+      building: {
+        name: "SF DBI (Building Inspection)",
+        url: `https://www.google.com/search?q=site:sf.gov/departments/department-building-inspection+"${addressQuery}"`
+      },
+      housing: {
+        name: "SF MOHCD (Housing)",
+        url: `https://www.google.com/search?q=site:sf.gov/departments/mayors-office-housing-and-community-development+"${addressQuery}"`
+      },
+      planning: {
+        name: "SF Planning (Property Map)",
+        url: `https://www.google.com/search?q=site:sfplanninggis.org+OR+site:sfplanning.org+"${addressQuery}"`
+      }
+    };
+  }
+
+  // Default fallback for any other city in the US/World
+  const cityState = `${cleanCity ? cleanCity + ' ' : ''}${cleanState ? cleanState + ' ' : ''}`;
+  return {
+    building: {
+      name: `${cleanCity || 'Local'} Building Dept`,
+      url: `https://www.google.com/search?q=${encodeURIComponent(cityState + "building department permit violations " + address)}`
+    },
+    housing: {
+      name: `${cleanCity || 'Local'} Housing Dept`,
+      url: `https://www.google.com/search?q=${encodeURIComponent(cityState + "housing authority housing department " + address)}`
+    },
+    planning: {
+      name: `${cleanCity || 'Local'} Planning & Zoning`,
+      url: `https://www.google.com/search?q=${encodeURIComponent(cityState + "planning zoning maps code " + address)}`
+    }
+  };
+}
+
 // Search Autocomplete Handlers
 let searchTimeout;
 searchInput.addEventListener('input', (e) => {
@@ -218,16 +400,30 @@ searchInput.addEventListener('input', (e) => {
   searchTimeout = setTimeout(() => {
     // Normalize hyphenated ranges (e.g., 33-35 W 125th St -> 33 W 125th St) to satisfy geosearch API
     const cleanVal = val.replace(/^(\d+)-(\d+)\s+/, '$1 ');
-    fetch(`https://geosearch.planninglabs.nyc/v2/autocomplete?text=${encodeURIComponent(cleanVal)}`)
+    
+    const planningLabsPromise = fetch(`https://geosearch.planninglabs.nyc/v2/autocomplete?text=${encodeURIComponent(cleanVal)}`)
       .then(res => res.json())
-      .then(data => {
-        if (!data.features || data.features.length === 0) {
-          autocompleteDropdown.style.display = 'none';
-          return;
-        }
+      .catch(err => {
+        console.warn('PlanningLabs autocomplete failed:', err);
+        return { features: [] };
+      });
+      
+    const photonPromise = fetch(`https://photon.komoot.io/api/?q=${encodeURIComponent(val)}&limit=8`)
+      .then(res => res.json())
+      .catch(err => {
+        console.warn('Photon autocomplete failed:', err);
+        return { features: [] };
+      });
+
+    Promise.all([planningLabsPromise, photonPromise])
+      .then(([plData, phData]) => {
+        const plFeatures = plData.features || [];
+        const phFeatures = phData.features || [];
 
         autocompleteDropdown.innerHTML = '';
-        data.features.forEach(feat => {
+
+        // Add PlanningLabs results first
+        plFeatures.forEach(feat => {
           const props = feat.properties;
           const pad = props.addendum ? props.addendum.pad : null;
           if (!pad || !pad.bbl) return; // skip if no BBL
@@ -249,9 +445,41 @@ searchInput.addEventListener('input', (e) => {
           autocompleteDropdown.appendChild(div);
         });
 
+        // Add Photon results next
+        phFeatures.forEach(feat => {
+          const props = feat.properties;
+          const coords = feat.geometry ? feat.geometry.coordinates : null;
+          if (!coords || coords.length < 2) return;
+          const lon = coords[0];
+          const lat = coords[1];
+
+          // Check if coordinate is in NYC and if we already have PlanningLabs results
+          const inNYC = isCoordinatesInNYC(lat, lon);
+          if (inNYC && plFeatures.length > 0) {
+            return; // skip duplicate NYC result
+          }
+
+          const label = formatPhotonLabel(props);
+          const city = props.city || props.town || props.village || '';
+          const state = props.state || '';
+
+          const div = document.createElement('div');
+          div.className = 'autocomplete-item';
+          div.innerHTML = `
+            <div class="item-title">${label}</div>
+            <div class="item-subtitle">Location: ${city || ''} ${state || ''} | GPS: ${lat.toFixed(4)}, ${lon.toFixed(4)}</div>
+          `;
+          div.addEventListener('click', () => {
+            searchInput.value = label;
+            autocompleteDropdown.style.display = 'none';
+            loadSite(null, null, label, lat, lon, props);
+          });
+          autocompleteDropdown.appendChild(div);
+        });
+
         autocompleteDropdown.style.display = autocompleteDropdown.children.length > 0 ? 'block' : 'none';
       })
-      .catch(err => console.error('Geosearch autocomplete failed:', err));
+      .catch(err => console.error('Merged autocomplete failed:', err));
   }, 300);
 });
 
@@ -274,12 +502,26 @@ searchInput.addEventListener('keydown', (e) => {
     // Address search on Enter
     if (val.length >= 3) {
       const cleanVal = val.replace(/^(\d+)-(\d+)\s+/, '$1 ');
-      fetch(`https://geosearch.planninglabs.nyc/v2/autocomplete?text=${encodeURIComponent(cleanVal)}`)
+      
+      const plPromise = fetch(`https://geosearch.planninglabs.nyc/v2/autocomplete?text=${encodeURIComponent(cleanVal)}`)
         .then(res => res.json())
-        .then(data => {
-          if (data.features && data.features.length > 0) {
-            // Find the first suggestion with pad details and a BBL
-            const feat = data.features.find(f => f.properties && f.properties.addendum && f.properties.addendum.pad && f.properties.addendum.pad.bbl);
+        .catch(err => {
+          console.warn('Enter geosearch failed:', err);
+          return { features: [] };
+        });
+
+      const phPromise = fetch(`https://photon.komoot.io/api/?q=${encodeURIComponent(val)}&limit=5`)
+        .then(res => res.json())
+        .catch(err => {
+          console.warn('Enter photon failed:', err);
+          return { features: [] };
+        });
+
+      Promise.all([plPromise, phPromise])
+        .then(([plData, phData]) => {
+          // 1. Try to find NYC match first
+          if (plData.features && plData.features.length > 0) {
+            const feat = plData.features.find(f => f.properties && f.properties.addendum && f.properties.addendum.pad && f.properties.addendum.pad.bbl);
             if (feat) {
               const props = feat.properties;
               const pad = props.addendum.pad;
@@ -289,10 +531,26 @@ searchInput.addEventListener('keydown', (e) => {
               searchInput.value = props.label || props.name;
               autocompleteDropdown.style.display = 'none';
               loadSite(pad.bbl, pad.bin, props.label || props.name, lat, lon);
+              return;
+            }
+          }
+
+          // 2. Fallback to Photon match
+          if (phData.features && phData.features.length > 0) {
+            const feat = phData.features[0];
+            const props = feat.properties;
+            const coords = feat.geometry ? feat.geometry.coordinates : null;
+            if (coords && coords.length >= 2) {
+              const lon = coords[0];
+              const lat = coords[1];
+              const label = formatPhotonLabel(props);
+              searchInput.value = label;
+              autocompleteDropdown.style.display = 'none';
+              loadSite(null, null, label, lat, lon, props);
             }
           }
         })
-        .catch(err => console.error('Enter search failed:', err));
+        .catch(err => console.error('Enter key search aggregation failed:', err));
     }
   }
 });
@@ -324,64 +582,79 @@ const MOCK_PROPERTIES = {
 };
 
 // Load and query zoning data for BBL
-function loadSite(bbl, bin = null, addressName = null, inputLat = null, inputLon = null) {
+function loadSite(bbl, bin = null, addressName = null, inputLat = null, inputLon = null, geojsonProps = null) {
   currentBBL = bbl;
+  
+  const isNonNyc = !bbl || !/^\d{10}$/.test(String(bbl));
+
   reportPanel.innerHTML = `
     <div style="text-align: center; padding: 40px; color: var(--text-secondary);">
       <div style="font-size: 24px; margin-bottom: 12px; animation: spin 2s linear infinite;">⏳</div>
-      <p>Gathering spatial coordinates & NYC PLUTO zoning data...</p>
+      <p>${isNonNyc ? 'Gathering coordinate references & local zoning templates...' : 'Gathering spatial coordinates & NYC PLUTO zoning data...'}</p>
     </div>
   `;
 
-  // Parse BBL components safely
-  const bblStr = String(bbl);
-  const boroughDigit = bblStr.substring(0, 1);
-  const rawBlock = bblStr.substring(1, 6);
-  const rawLot = bblStr.substring(6, 10);
+  let dataPromise;
 
-  // Convert to numeric integers (strip leading zeros) for Socrata API query
-  const blockNum = parseInt(rawBlock, 10);
-  const lotNum = parseInt(rawLot, 10);
+  if (bbl && MOCK_PROPERTIES[bbl]) {
+    // Resolve immediately for preloaded mock properties to ensure instant load
+    dataPromise = Promise.resolve([[MOCK_PROPERTIES[bbl]], [], []]);
+  } else if (isNonNyc) {
+    // Resolve immediately for non-NYC locations
+    dataPromise = Promise.resolve([[], [], []]);
+  } else {
+    // Parse BBL components safely
+    const bblStr = String(bbl);
+    const boroughDigit = bblStr.substring(0, 1);
+    const rawBlock = bblStr.substring(1, 6);
+    const rawLot = bblStr.substring(6, 10);
 
-  const boroMap = { '1': 'MN', '2': 'BX', '3': 'BK', '4': 'QN', '5': 'SI' };
-  const borough = boroMap[boroughDigit];
+    // Convert to numeric integers (strip leading zeros) for Socrata API query
+    const blockNum = parseInt(rawBlock, 10);
+    const lotNum = parseInt(rawLot, 10);
 
-  if (!borough) {
-    reportPanel.innerHTML = `<div class="welcome-screen">❌ Invalid Borough identifier in BBL.</div>`;
-    return;
+    const boroMap = { '1': 'MN', '2': 'BX', '3': 'BK', '4': 'QN', '5': 'SI' };
+    const borough = boroMap[boroughDigit];
+
+    if (!borough) {
+      reportPanel.innerHTML = `<div class="welcome-screen">❌ Invalid Borough identifier in BBL.</div>`;
+      return;
+    }
+
+    // Fetch PLUTO, building footprints, and ZAP applications concurrently
+    const plutoUrl = `https://data.cityofnewyork.us/resource/64uk-42ks.json?borough=${borough}&block=${blockNum}&lot=${lotNum}`;
+    const footprintsUrl = `https://data.cityofnewyork.us/resource/5zhs-2jue.json?base_bbl=${bbl}`;
+    const zapBblUrl = `https://data.cityofnewyork.us/resource/2iga-a6mk.json?bbl=${bbl}`;
+
+    dataPromise = Promise.all([
+      fetch(plutoUrl)
+        .then(r => {
+          if (!r.ok) throw new Error("PLUTO Socrata Server Error: " + r.status);
+          return r.json();
+        })
+        .catch(err => {
+          console.warn("PLUTO fetch failed, checking local mock database:", err);
+          if (MOCK_PROPERTIES[bbl]) {
+            return [MOCK_PROPERTIES[bbl]];
+          }
+          throw err;
+        }),
+      fetch(footprintsUrl)
+        .then(r => r.json())
+        .catch(err => {
+          console.warn("Building footprints fetch failed:", err);
+          return [];
+        }),
+      fetch(zapBblUrl)
+        .then(r => r.json())
+        .catch(err => {
+          console.warn("ZAP BBL fetch failed:", err);
+          return [];
+        })
+    ]);
   }
 
-  // Fetch PLUTO, building footprints, and ZAP applications concurrently
-  const plutoUrl = `https://data.cityofnewyork.us/resource/64uk-42ks.json?borough=${borough}&block=${blockNum}&lot=${lotNum}`;
-  const footprintsUrl = `https://data.cityofnewyork.us/resource/5zhs-2jue.json?base_bbl=${bbl}`;
-  const zapBblUrl = `https://data.cityofnewyork.us/resource/2iga-a6mk.json?bbl=${bbl}`;
-
-  Promise.all([
-    fetch(plutoUrl)
-      .then(r => {
-        if (!r.ok) throw new Error("PLUTO Socrata Server Error: " + r.status);
-        return r.json();
-      })
-      .catch(err => {
-        console.warn("PLUTO fetch failed, checking local mock database:", err);
-        if (MOCK_PROPERTIES[bbl]) {
-          return [MOCK_PROPERTIES[bbl]];
-        }
-        throw err;
-      }),
-    fetch(footprintsUrl)
-      .then(r => r.json())
-      .catch(err => {
-        console.warn("Building footprints fetch failed:", err);
-        return [];
-      }),
-    fetch(zapBblUrl)
-      .then(r => r.json())
-      .catch(err => {
-        console.warn("ZAP BBL fetch failed:", err);
-        return [];
-      })
-  ])
+  dataPromise
   .then(([plutoRows, footprintRows, zapBblRows]) => {
     let lat = inputLat;
     let lon = inputLon;
@@ -391,31 +664,59 @@ function loadSite(bbl, bin = null, addressName = null, inputLat = null, inputLon
         throw new Error("Tax lot BBL not found in PLUTO. Please try searching via address suggestion.");
       }
       
-      // Fallback data structure for new/split lots (e.g. 35 W 125th St new lot)
+      let cityVal = "";
+      let stateVal = "";
+      let postcodeVal = "";
+      
+      if (isNonNyc) {
+        if (geojsonProps) {
+          cityVal = geojsonProps.city || geojsonProps.town || geojsonProps.village || "";
+          stateVal = geojsonProps.state || "";
+          postcodeVal = geojsonProps.postcode || "";
+        } else if (addressName) {
+          const parts = addressName.split(',').map(p => p.trim());
+          if (parts.length >= 3) {
+            cityVal = parts[parts.length - 3] || "";
+            const stateZip = parts[parts.length - 2] || "";
+            const szParts = stateZip.split(/\s+/);
+            stateVal = szParts[0] || "";
+            postcodeVal = szParts[1] || "";
+          }
+        }
+      }
+
+      // Fallback data structure for new/split lots or non-NYC
       plutoData = {
-        bbl: bbl,
+        bbl: bbl || "N/A",
         address: addressName || `BBL ${bbl}`,
-        zonedist1: "C4-7", 
-        spdist1: "125th",
-        lotarea: "12000", 
-        bldgarea: "166023",
-        builtfar: "13.85",
-        residfar: "10.0",
-        commfar: "10.0",
-        facilfar: "10.0",
-        affresfar: "12.0",
-        numfloors: "21",
-        yearbuilt: "2025",
+        zonedist1: isNonNyc ? "MU-Generic" : "C4-7", 
+        spdist1: isNonNyc ? null : "125th",
+        lotarea: isNonNyc ? "10000" : "12000", 
+        bldgarea: "0",
+        builtfar: "0.0",
+        residfar: isNonNyc ? "2.5" : "10.0",
+        commfar: isNonNyc ? "2.0" : "10.0",
+        facilfar: isNonNyc ? "2.0" : "10.0",
+        affresfar: "0.0",
+        numfloors: "0",
+        yearbuilt: "N/A",
         latitude: String(lat),
         longitude: String(lon),
-        lotfront: "120",
+        lotfront: "100",
         lotdepth: "100",
         splitzone: false,
         landmark: null,
-        fallback: true
+        fallback: true,
+        isNonNyc: isNonNyc,
+        city: cityVal,
+        state: stateVal,
+        postcode: postcodeVal
       };
     } else {
       plutoData = plutoRows[0];
+      plutoData.city = "New York";
+      plutoData.state = "NY";
+      plutoData.isNonNyc = false;
     }
     footprintsData = footprintRows;
 
@@ -448,6 +749,10 @@ function loadSite(bbl, bin = null, addressName = null, inputLat = null, inputLon
     if (tabContainer) {
       tabContainer.style.display = 'flex';
     }
+
+    // Update save location button state and show saved list
+    updateSaveButtonState();
+    renderSavedLocationsList();
 
     const siteLat = parseFloat(plutoData.latitude);
     const siteLon = parseFloat(plutoData.longitude);
@@ -956,6 +1261,768 @@ const formatDec = (val) => {
   return val.toFixed(2);
 };
 
+// Saved Locations Storage Helper
+function getSavedLocations() {
+  try {
+    const saved = localStorage.getItem('sitepro_saved_locations');
+    return saved ? JSON.parse(saved) : [];
+  } catch (e) {
+    console.error('Error reading saved locations:', e);
+    return [];
+  }
+}
+
+function saveSavedLocations(locations) {
+  try {
+    localStorage.setItem('sitepro_saved_locations', JSON.stringify(locations));
+  } catch (e) {
+    console.error('Error saving locations:', e);
+  }
+}
+
+function renderSavedLocationsList() {
+  const container = document.getElementById('saved-locations-container');
+  const listElement = document.getElementById('saved-locations-list');
+  if (!container || !listElement) return;
+
+  const saved = getSavedLocations();
+  if (saved.length === 0) {
+    container.style.display = 'none';
+    return;
+  }
+
+  container.style.display = 'block';
+  listElement.innerHTML = saved.map((loc, idx) => `
+    <div class="saved-location-item" data-index="${idx}">
+      <span class="saved-location-name" title="${loc.addressName}">${loc.addressName}</span>
+      <button class="saved-location-delete" data-index="${idx}" title="Delete location">×</button>
+    </div>
+  `).join('');
+}
+
+function updateSaveButtonState() {
+  const saveBtn = document.getElementById('save-location-btn');
+  if (!saveBtn || !plutoData) return;
+
+  saveBtn.style.display = 'flex';
+  const saved = getSavedLocations();
+  const currentAddress = currentAddressName || plutoData.address;
+  const isSaved = saved.some(loc => loc.addressName === currentAddress);
+  
+  if (isSaved) {
+    saveBtn.classList.add('saved');
+    saveBtn.title = 'Remove from saved locations';
+  } else {
+    saveBtn.classList.remove('saved');
+    saveBtn.title = 'Save this location';
+  }
+}
+
+function setupSavedLocationsEvents() {
+  const saveBtn = document.getElementById('save-location-btn');
+  if (saveBtn) {
+    saveBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (!plutoData) return;
+
+      const currentAddress = currentAddressName || plutoData.address;
+      let saved = getSavedLocations();
+      const index = saved.findIndex(loc => loc.addressName === currentAddress);
+
+      if (index > -1) {
+        // Remove
+        saved.splice(index, 1);
+      } else {
+        // Add
+        saved.push({
+          bbl: currentBBL,
+          bin: plutoData.bin || null,
+          addressName: currentAddress,
+          lat: plutoData.latitude ? parseFloat(plutoData.latitude) : null,
+          lon: plutoData.longitude ? parseFloat(plutoData.longitude) : null,
+          isNonNyc: plutoData.isNonNyc || false,
+          geojsonProps: plutoData.fallback && plutoData.isNonNyc ? {
+            city: plutoData.city,
+            state: plutoData.state,
+            postcode: plutoData.postcode
+          } : null
+        });
+      }
+
+      saveSavedLocations(saved);
+      updateSaveButtonState();
+      renderSavedLocationsList();
+    });
+  }
+
+  const listElement = document.getElementById('saved-locations-list');
+  if (listElement) {
+    listElement.addEventListener('click', (e) => {
+      const deleteBtn = e.target.closest('.saved-location-delete');
+      if (deleteBtn) {
+        e.stopPropagation();
+        const idx = parseInt(deleteBtn.dataset.index, 10);
+        let saved = getSavedLocations();
+        saved.splice(idx, 1);
+        saveSavedLocations(saved);
+        updateSaveButtonState();
+        renderSavedLocationsList();
+        return;
+      }
+
+      const item = e.target.closest('.saved-location-item');
+      if (item) {
+        const idx = parseInt(item.dataset.index, 10);
+        const saved = getSavedLocations();
+        const loc = saved[idx];
+        if (loc) {
+          loadSite(loc.bbl, loc.bin, loc.addressName, loc.lat, loc.lon, loc.geojsonProps);
+        }
+      }
+    });
+  }
+}
+
+// Contact Logs Database Helpers
+const CONTACT_ROLES = [
+  { value: 'owner', label: 'Owner' },
+  { value: 'sales-broker', label: 'Sales Broker' },
+  { value: 'rental-broker', label: 'Rental Broker' },
+  { value: 'engineer', label: 'Engineer' },
+  { value: 'title-company', label: 'Title Company' },
+  { value: 'lawyer', label: 'Lawyer' },
+  { value: 'attorney', label: 'Attorney' },
+  { value: 'architect', label: 'Architect' },
+  { value: 'mortgage-broker', label: 'Mortgage Broker' },
+  { value: 'other', label: 'Other' }
+];
+
+function getContactsFromDOM() {
+  const contactRows = document.querySelectorAll('.saved-contact-row');
+  const contacts = [];
+  contactRows.forEach(row => {
+    const role = row.querySelector('.contact-role-select')?.value || 'other';
+    const firstName = row.querySelector('.contact-first-name')?.value || '';
+    const lastName = row.querySelector('.contact-last-name')?.value || '';
+    const company = row.querySelector('.contact-company')?.value || '';
+    const workPhone = row.querySelector('.contact-work-phone')?.value || '';
+    const cellPhone = row.querySelector('.contact-cell-phone')?.value || '';
+    const email = row.querySelector('.contact-email')?.value || '';
+    const address = row.querySelector('.contact-address')?.value || '';
+
+    contacts.push({
+      firstName,
+      lastName,
+      role,
+      company,
+      workPhone,
+      cellPhone,
+      email,
+      address
+    });
+  });
+  return contacts;
+}
+
+function syncInteractionFields() {
+  const spokeWithSelect = document.getElementById('log-spoke-with');
+  if (!spokeWithSelect) return;
+
+  const val = spokeWithSelect.value;
+  const contactsData = getPropertyContactsData() || { contacts: [] };
+  const savedContacts = contactsData.contacts || [];
+
+  // Containers
+  const customNameContainer = document.getElementById('log-custom-name-container');
+  const customCompanyContainer = document.getElementById('log-custom-company-container');
+  const customPhonesContainer = document.getElementById('log-custom-phones-container');
+  const customEmailAddressContainer = document.getElementById('log-custom-email-address-container');
+
+  // Fields to populate
+  const roleSelect = document.getElementById('log-role');
+  const companySelect = document.getElementById('log-company');
+  const workPhoneSelect = document.getElementById('log-work-phone');
+  const cellPhoneSelect = document.getElementById('log-cell-phone');
+  const emailSelect = document.getElementById('log-email');
+  const addressSelect = document.getElementById('log-address');
+
+  if (val === 'other') {
+    // Show custom fields
+    if (customNameContainer) customNameContainer.style.display = 'block';
+    
+    // Set all other selects to "custom" and show their text inputs
+    populateSelectWithOptions(roleSelect, CONTACT_ROLES, 'other');
+    populateSelectWithOptions(companySelect, [{ value: 'custom', label: 'Custom...' }], 'custom');
+    populateSelectWithOptions(workPhoneSelect, [{ value: 'custom', label: 'Custom...' }], 'custom');
+    populateSelectWithOptions(cellPhoneSelect, [{ value: 'custom', label: 'Custom...' }], 'custom');
+    populateSelectWithOptions(emailSelect, [{ value: 'custom', label: 'Custom...' }], 'custom');
+    populateSelectWithOptions(addressSelect, [{ value: 'custom', label: 'Custom...' }], 'custom');
+
+    if (customCompanyContainer) customCompanyContainer.style.display = 'block';
+    if (customPhonesContainer) customPhonesContainer.style.display = 'grid';
+    if (customEmailAddressContainer) customEmailAddressContainer.style.display = 'grid';
+  } else {
+    // Hide custom name container
+    if (customNameContainer) customNameContainer.style.display = 'none';
+
+    // Find selected contact details
+    let selectedContact = null;
+    if (val.startsWith('saved|')) {
+      const parts = val.split('|');
+      const fullName = parts[1];
+      const role = parts[2];
+      selectedContact = savedContacts.find(c => {
+        const name = [c.firstName, c.lastName].filter(Boolean).join(' ');
+        return name === fullName && c.role === role;
+      });
+    } else if (val.startsWith('contact|')) {
+      const parts = val.split('|');
+      const fullName = parts[1];
+      const role = parts[2];
+      const logs = contactsData.logs || [];
+      const matchingLog = logs.find(log => {
+        return log.spokeWith === fullName && log.role === role;
+      });
+      if (matchingLog) {
+        selectedContact = {
+          firstName: fullName.split(' ')[0] || '',
+          lastName: fullName.split(' ').slice(1).join(' ') || '',
+          role: matchingLog.role,
+          company: matchingLog.company,
+          workPhone: matchingLog.workPhone,
+          cellPhone: matchingLog.cellPhone,
+          email: matchingLog.email,
+          address: matchingLog.address
+        };
+      }
+    }
+
+    const roleVal = selectedContact?.role || 'other';
+    const companyVal = selectedContact?.company || '';
+    const workPhoneVal = selectedContact?.workPhone || '';
+    const cellPhoneVal = selectedContact?.cellPhone || '';
+    const emailVal = selectedContact?.email || '';
+    const addressVal = selectedContact?.address || '';
+
+    // Populate Role
+    populateSelectWithOptions(roleSelect, CONTACT_ROLES, roleVal);
+
+    // Populate Company (contact's company, plus all other saved companies, plus custom)
+    const companyOptions = getUniqueOptionsForField(savedContacts, 'company', companyVal);
+    populateSelectWithOptions(companySelect, companyOptions, companyVal || 'none');
+
+    // Populate Work Phone
+    const workPhoneOptions = getUniqueOptionsForField(savedContacts, 'workPhone', workPhoneVal);
+    populateSelectWithOptions(workPhoneSelect, workPhoneOptions, workPhoneVal || 'none');
+
+    // Populate Cell Phone
+    const cellPhoneOptions = getUniqueOptionsForField(savedContacts, 'cellPhone', cellPhoneVal);
+    populateSelectWithOptions(cellPhoneSelect, cellPhoneOptions, cellPhoneVal || 'none');
+
+    // Populate Email
+    const emailOptions = getUniqueOptionsForField(savedContacts, 'email', emailVal);
+    populateSelectWithOptions(emailSelect, emailOptions, emailVal || 'none');
+
+    // Populate Address
+    const addressOptions = getUniqueOptionsForField(savedContacts, 'address', addressVal);
+    populateSelectWithOptions(addressSelect, addressOptions, addressVal || 'none');
+
+    // Toggle custom containers based on initial select values
+    toggleCustomInputsVisibility();
+  }
+}
+
+function populateSelectWithOptions(selectElem, options, selectedValue) {
+  if (!selectElem) return;
+  selectElem.innerHTML = options.map(opt => {
+    const selected = opt.value === selectedValue ? 'selected' : '';
+    return `<option value="${opt.value}" ${selected}>${opt.label}</option>`;
+  }).join('');
+}
+
+function getUniqueOptionsForField(contacts, fieldName, contactValue) {
+  const uniqueValues = new Set();
+  if (contactValue && contactValue.trim()) uniqueValues.add(contactValue.trim());
+
+  contacts.forEach(c => {
+    const val = c[fieldName];
+    if (val && val.trim()) {
+      uniqueValues.add(val.trim());
+    }
+  });
+
+  const options = [];
+  if (contactValue && contactValue.trim()) {
+    options.push({ value: contactValue, label: contactValue });
+  } else {
+    options.push({ value: 'none', label: 'None / Empty' });
+  }
+
+  uniqueValues.forEach(val => {
+    if (val !== contactValue) {
+      options.push({ value: val, label: val });
+    }
+  });
+
+  options.push({ value: 'custom', label: 'Custom / New...' });
+  return options;
+}
+
+function toggleCustomInputsVisibility() {
+  const customCompanyContainer = document.getElementById('log-custom-company-container');
+  const customPhonesContainer = document.getElementById('log-custom-phones-container');
+  const customEmailAddressContainer = document.getElementById('log-custom-email-address-container');
+
+  const companyVal = document.getElementById('log-company')?.value;
+  const workPhoneVal = document.getElementById('log-work-phone')?.value;
+  const cellPhoneVal = document.getElementById('log-cell-phone')?.value;
+  const emailVal = document.getElementById('log-email')?.value;
+  const addressVal = document.getElementById('log-address')?.value;
+
+  if (customCompanyContainer) {
+    customCompanyContainer.style.display = companyVal === 'custom' ? 'block' : 'none';
+  }
+
+  // Work Phone & Cell Phone
+  const workPhoneGroup = document.getElementById('log-custom-work-phone')?.closest('.contacts-form-group');
+  const cellPhoneGroup = document.getElementById('log-custom-cell-phone')?.closest('.contacts-form-group');
+  if (workPhoneGroup) workPhoneGroup.style.display = workPhoneVal === 'custom' ? 'block' : 'none';
+  if (cellPhoneGroup) cellPhoneGroup.style.display = cellPhoneVal === 'custom' ? 'block' : 'none';
+  if (customPhonesContainer) {
+    const showPhones = (workPhoneVal === 'custom' || cellPhoneVal === 'custom');
+    customPhonesContainer.style.display = showPhones ? 'grid' : 'none';
+  }
+
+  // Email & Address
+  const emailGroup = document.getElementById('log-custom-email')?.closest('.contacts-form-group');
+  const addressGroup = document.getElementById('log-custom-address')?.closest('.contacts-form-group');
+  if (emailGroup) emailGroup.style.display = emailVal === 'custom' ? 'block' : 'none';
+  if (addressGroup) addressGroup.style.display = addressVal === 'custom' ? 'block' : 'none';
+  if (customEmailAddressContainer) {
+    const showEmailAddress = (emailVal === 'custom' || addressVal === 'custom');
+    customEmailAddressContainer.style.display = showEmailAddress ? 'grid' : 'none';
+  }
+}
+
+function getPropertyStorageKey() {
+  if (!plutoData) return null;
+  const key = plutoData.isNonNyc 
+    ? plutoData.address.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase() 
+    : plutoData.bbl;
+  return `sitepro_property_${key}`;
+}
+
+function getPropertyContactsData() {
+  const key = getPropertyStorageKey();
+  if (!key) return null;
+  try {
+    const data = localStorage.getItem(key);
+    if (data) {
+      const parsed = JSON.parse(data);
+      if (!parsed.logs) parsed.logs = [];
+      if (!parsed.contacts) {
+        parsed.contacts = [];
+        if (parsed.ownerFirstName || parsed.ownerLastName) {
+          parsed.contacts.push({
+            firstName: parsed.ownerFirstName || '',
+            lastName: parsed.ownerLastName || '',
+            role: 'owner'
+          });
+        }
+        if (parsed.salesBrokerFirstName || parsed.salesBrokerLastName) {
+          parsed.contacts.push({
+            firstName: parsed.salesBrokerFirstName || '',
+            lastName: parsed.salesBrokerLastName || '',
+            role: 'sales-broker'
+          });
+        }
+      }
+      return parsed;
+    }
+  } catch (e) {
+    console.error('Error reading contacts data:', e);
+  }
+  return {
+    ownerFirstName: '',
+    ownerLastName: '',
+    salesBrokerFirstName: '',
+    salesBrokerLastName: '',
+    contacts: [],
+    logs: []
+  };
+}
+
+function savePropertyContactsData(data) {
+  const key = getPropertyStorageKey();
+  if (!key) return;
+  try {
+    localStorage.setItem(key, JSON.stringify(data));
+  } catch (e) {
+    console.error('Error saving contacts data:', e);
+  }
+}
+
+
+// Render Contact Logs & Details Tab Content
+function renderContactsTab() {
+  const contactsData = getPropertyContactsData() || {
+    ownerFirstName: '',
+    ownerLastName: '',
+    salesBrokerFirstName: '',
+    salesBrokerLastName: '',
+    contacts: [],
+    logs: []
+  };
+
+  // Safe fallback if contacts is not initialized
+  if (!contactsData.contacts) {
+    contactsData.contacts = [];
+    if (contactsData.ownerFirstName || contactsData.ownerLastName) {
+      contactsData.contacts.push({ firstName: contactsData.ownerFirstName || '', lastName: contactsData.ownerLastName || '', role: 'owner' });
+    }
+    if (contactsData.salesBrokerFirstName || contactsData.salesBrokerLastName) {
+      contactsData.contacts.push({ firstName: contactsData.salesBrokerFirstName || '', lastName: contactsData.salesBrokerLastName || '', role: 'sales-broker' });
+    }
+  }
+
+  const ownerName = [contactsData.ownerFirstName, contactsData.ownerLastName].filter(Boolean).join(' ');
+  const brokerName = [contactsData.salesBrokerFirstName, contactsData.salesBrokerLastName].filter(Boolean).join(' ');
+
+  const displayAddress = currentAddressName || plutoData.address || `${plutoData.block} Block, ${plutoData.lot} Lot`;
+
+  // Format datetime-local default value (YYYY-MM-DDTHH:MM)
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  const hours = String(now.getHours()).padStart(2, '0');
+  const minutes = String(now.getMinutes()).padStart(2, '0');
+  const defaultDateTime = `${year}-${month}-${day}T${hours}:${minutes}`;
+
+  // Extract unique custom logged contacts from history
+  const loggedContacts = [];
+  const seenNames = new Set();
+
+  if (ownerName) seenNames.add(ownerName.trim().toLowerCase());
+  if (brokerName) seenNames.add(brokerName.trim().toLowerCase());
+
+  contactsData.contacts.forEach(contact => {
+    const fullName = [contact.firstName, contact.lastName].filter(Boolean).join(' ').trim();
+    if (fullName) {
+      seenNames.add(fullName.toLowerCase());
+    }
+  });
+
+  if (contactsData.logs && contactsData.logs.length > 0) {
+    for (const log of contactsData.logs) {
+      if (log.spokeWith) {
+        const cleanedName = log.spokeWith.trim();
+        const nameLower = cleanedName.toLowerCase();
+        
+        // Skip default placeholders, "Other", and duplicates
+        if (
+          nameLower && 
+          !seenNames.has(nameLower) && 
+          nameLower !== 'property owner' && 
+          nameLower !== 'sales broker' && 
+          nameLower !== 'other'
+        ) {
+          seenNames.add(nameLower);
+          loggedContacts.push({
+            name: cleanedName,
+            role: log.role || 'other'
+          });
+        }
+      }
+    }
+  }
+
+  // Format logged contacts as options
+  const loggedOptions = loggedContacts.map(contact => {
+    const formattedRole = contact.role 
+      ? contact.role.split('-').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')
+      : 'Other';
+    const displayLabel = `${contact.name} (${formattedRole})`;
+    const val = `contact|${contact.name}|${contact.role || 'other'}`;
+    return `<option value="${val}">${displayLabel}</option>`;
+  }).join('');
+
+  // Format saved contacts as options
+  const savedOptions = contactsData.contacts.map(contact => {
+    const fullName = [contact.firstName, contact.lastName].filter(Boolean).join(' ').trim();
+    const displayRole = CONTACT_ROLES.find(r => r.value === contact.role)?.label || 'Other';
+    const displayLabel = fullName ? `${fullName} (${displayRole})` : `Unnamed (${displayRole})`;
+    const val = `saved|${fullName || 'Unnamed'}|${contact.role}`;
+    return `<option value="${val}">${displayLabel}</option>`;
+  }).join('');
+
+  // Build the Contact History HTML
+  let logsHtml = '';
+  if (contactsData.logs && contactsData.logs.length > 0) {
+    const sortedLogs = [...contactsData.logs].sort((a, b) => new Date(b.dateTime) - new Date(a.dateTime));
+    
+    logsHtml = sortedLogs.map((log) => {
+      const formattedDate = new Date(log.dateTime).toLocaleString(undefined, {
+        dateStyle: 'medium',
+        timeStyle: 'short'
+      });
+      
+      const roleClass = (log.role || log.spokeWith || 'other').toLowerCase().replace(/\s+/g, '-');
+      
+      let displaySpokeWith = log.spokeWith;
+      if (log.role && log.role !== 'other') {
+        const roleLabel = log.role.split('-').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
+        const isPlaceholder = log.spokeWith.toLowerCase() === roleLabel.toLowerCase();
+        if (!isPlaceholder && !log.spokeWith.endsWith(`(${roleLabel})`)) {
+          displaySpokeWith = `${log.spokeWith} (${roleLabel})`;
+        }
+      }
+
+      // Format details
+      let contactDetailsHtml = '';
+      const detailItems = [];
+      if (log.company) detailItems.push(`🏢 <strong>Company:</strong> ${log.company}`);
+      if (log.workPhone) detailItems.push(`📞 <strong>Work Phone:</strong> ${log.workPhone}`);
+      if (log.cellPhone) detailItems.push(`📱 <strong>Cell:</strong> ${log.cellPhone}`);
+      if (log.email) detailItems.push(`✉️ <strong>Email:</strong> <a href="mailto:${log.email}" style="color: var(--accent-cyan); text-decoration: none;">${log.email}</a>`);
+      if (log.address) detailItems.push(`📍 <strong>Address:</strong> ${log.address}`);
+
+      if (detailItems.length > 0) {
+        contactDetailsHtml = `
+          <div class="log-contact-details" style="font-size: 11px; color: var(--text-secondary); display: grid; grid-template-columns: 1fr 1fr; gap: 4px 12px; margin-top: 6px; padding: 6px; background: rgba(255, 255, 255, 0.01); border-radius: 4px; border-left: 2px solid var(--accent-cyan); margin-bottom: 6px;">
+            ${detailItems.map(item => `<div>${item}</div>`).join('')}
+          </div>
+        `;
+      }
+      
+      return `
+        <div class="log-item" style="border-left: 3px solid var(--border-color); padding-left: 12px;">
+          <div class="log-header">
+            <span class="contacts-badge badge-${roleClass}">${displaySpokeWith}</span>
+            <span class="log-time">${formattedDate}</span>
+          </div>
+          ${contactDetailsHtml}
+          <div class="log-notes" style="margin-top: 8px;">${log.notes || 'No details provided.'}</div>
+          <div style="text-align: right; margin-top: 4px;">
+            <button class="log-delete-btn" data-id="${log.id || log.dateTime}" title="Delete log entry">Delete Entry</button>
+          </div>
+        </div>
+      `;
+    }).join('');
+  } else {
+    logsHtml = `<p style="font-size: 12px; color: var(--text-muted); text-align: center; padding: 24px 0;">No contact logs recorded yet.</p>`;
+  }
+
+  // Generate individual contact input fields with all fields
+  const contactsInputsHtml = contactsData.contacts.length > 0
+    ? contactsData.contacts.map((contact, index) => {
+        const roleOptions = CONTACT_ROLES.map(role => {
+          const selected = contact.role === role.value ? 'selected' : '';
+          return `<option value="${role.value}" ${selected}>${role.label}</option>`;
+        }).join('');
+
+        return `
+          <div class="saved-contact-row" data-index="${index}" style="margin-bottom: 16px; padding: 12px; background: rgba(255, 255, 255, 0.02); border: 1px solid var(--border-color); border-radius: 8px; position: relative;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+              <span style="font-size: 11px; font-weight: 600; color: var(--accent-cyan);">Contact #${index + 1}</span>
+              <button type="button" class="remove-contact-btn" data-index="${index}" style="background: transparent; border: none; color: var(--accent-magenta); cursor: pointer; font-size: 11px; padding: 0;">✕ Remove</button>
+            </div>
+            
+            <div class="contacts-form-row" style="margin-bottom: 8px;">
+              <div class="contacts-form-group" style="margin-bottom: 0;">
+                <label class="contacts-form-label">First Name</label>
+                <input type="text" class="contacts-input contact-first-name" placeholder="First Name" value="${contact.firstName || ''}">
+              </div>
+              <div class="contacts-form-group" style="margin-bottom: 0;">
+                <label class="contacts-form-label">Last Name</label>
+                <input type="text" class="contacts-input contact-last-name" placeholder="Last Name" value="${contact.lastName || ''}">
+              </div>
+            </div>
+
+            <div class="contacts-form-row" style="margin-bottom: 8px;">
+              <div class="contacts-form-group" style="margin-bottom: 0;">
+                <label class="contacts-form-label">Role</label>
+                <select class="contacts-input contact-role-select" style="height: 34px;">
+                  ${roleOptions}
+                </select>
+              </div>
+              <div class="contacts-form-group" style="margin-bottom: 0;">
+                <label class="contacts-form-label">Company</label>
+                <input type="text" class="contacts-input contact-company" placeholder="Company Name" value="${contact.company || ''}">
+              </div>
+            </div>
+
+            <div class="contacts-form-row" style="margin-bottom: 8px;">
+              <div class="contacts-form-group" style="margin-bottom: 0;">
+                <label class="contacts-form-label">Work Phone</label>
+                <input type="text" class="contacts-input contact-work-phone" placeholder="Work Phone" value="${contact.workPhone || ''}">
+              </div>
+              <div class="contacts-form-group" style="margin-bottom: 0;">
+                <label class="contacts-form-label">Cell Phone</label>
+                <input type="text" class="contacts-input contact-cell-phone" placeholder="Cell Phone" value="${contact.cellPhone || ''}">
+              </div>
+            </div>
+
+            <div class="contacts-form-row" style="margin-bottom: 0;">
+              <div class="contacts-form-group" style="margin-bottom: 0;">
+                <label class="contacts-form-label">Email</label>
+                <input type="email" class="contacts-input contact-email" placeholder="Email Address" value="${contact.email || ''}">
+              </div>
+              <div class="contacts-form-group" style="margin-bottom: 0;">
+                <label class="contacts-form-label">Address</label>
+                <input type="text" class="contacts-input contact-address" placeholder="Mailing Address" value="${contact.address || ''}">
+              </div>
+            </div>
+          </div>
+        `;
+      }).join('')
+    : `<p style="font-size: 12px; color: var(--text-muted); text-align: center; padding: 24px 0; margin: 0;">No saved contacts for this property.</p>`;
+
+  reportPanel.innerHTML = `
+    <!-- Property Contact Details Card -->
+    <div class="section-card highlight">
+      <div class="card-title">
+        <span>Property Contact Info</span>
+        <span style="font-size: 10px; color: var(--text-muted);">${displayAddress}</span>
+      </div>
+      
+      <form id="property-contacts-form" onsubmit="event.preventDefault();">
+        <div id="saved-contacts-list">
+          ${contactsInputsHtml}
+        </div>
+        
+        <button id="add-contact-field-btn" class="control-btn" type="button" style="width: 100%; margin-bottom: 12px; border-color: var(--accent-cyan); color: var(--accent-cyan); background: transparent;">+ Add Contact</button>
+        
+        <button id="save-contacts-btn" class="control-btn active" style="width: 100%; margin-top: 8px;">Save Contact Information</button>
+        <div id="contacts-save-feedback"></div>
+      </form>
+
+      <!-- Contact Logs History Subform -->
+      <div style="margin-top: 24px; margin-bottom: 16px; padding: 12px; background: rgba(255, 255, 255, 0.02); border: 1px solid var(--border-color); border-radius: 8px; position: relative;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+          <span style="font-size: 11px; font-weight: 600; color: var(--accent-cyan);">Interaction History</span>
+          <button type="button" id="toggle-new-log-btn" style="background: transparent; border: 1px solid var(--accent-cyan); color: var(--accent-cyan); border-radius: 4px; padding: 2px 8px; font-size: 10px; cursor: pointer;">+ New Interaction</button>
+        </div>
+        
+        <div id="new-log-form-container" style="display: none; margin-bottom: 16px; padding-bottom: 16px; border-bottom: 1px solid rgba(255, 255, 255, 0.1);">
+          <form id="new-log-form" onsubmit="event.preventDefault();">
+            <!-- Contact & Date -->
+            <div class="contacts-form-row" style="margin-bottom: 12px;">
+              <div class="contacts-form-group" style="margin-bottom: 0;">
+                <label class="contacts-form-label">Who Spoke With? (Contact)</label>
+                <select id="log-spoke-with" class="contacts-input" style="height: 34px;">
+                  ${savedOptions}
+                  ${loggedOptions}
+                  <option value="other">Other / Custom Name...</option>
+                </select>
+              </div>
+              <div class="contacts-form-group" style="margin-bottom: 0;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                  <label class="contacts-form-label" style="margin-bottom: 0;">Date & Time</label>
+                  <button type="button" id="set-today-btn" style="background: transparent; border: none; color: var(--accent-cyan); cursor: pointer; font-size: 10px; padding: 0; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;">Today</button>
+                </div>
+                <input type="datetime-local" id="log-datetime" class="contacts-input" style="height: 34px; cursor: pointer;" value="${defaultDateTime}" onclick="this.showPicker()">
+              </div>
+            </div>
+            
+            <!-- Custom Name Input (Only shown if 'other' contact is selected) -->
+            <div id="log-custom-name-container" class="contacts-form-group" style="margin-bottom: 12px; display: none;">
+              <label class="contacts-form-label">Custom Contact Name</label>
+              <input type="text" id="log-custom-name" class="contacts-input" placeholder="Enter contact name...">
+            </div>
+
+            <!-- Role & Company Dropdowns -->
+            <div class="contacts-form-row" style="margin-bottom: 12px;">
+              <div class="contacts-form-group" style="margin-bottom: 0;">
+                <label class="contacts-form-label">Role</label>
+                <select id="log-role" class="contacts-input" style="height: 34px;">
+                  <!-- Populated by JS -->
+                </select>
+              </div>
+              <div class="contacts-form-group" style="margin-bottom: 0;">
+                <label class="contacts-form-label">Company</label>
+                <select id="log-company" class="contacts-input" style="height: 34px;">
+                  <!-- Populated by JS -->
+                </select>
+              </div>
+            </div>
+            <div id="log-custom-company-container" class="contacts-form-group" style="margin-bottom: 12px; display: none;">
+              <label class="contacts-form-label">Custom Company</label>
+              <input type="text" id="log-custom-company" class="contacts-input" placeholder="Enter custom company...">
+            </div>
+
+            <!-- Work Phone & Cell Phone Dropdowns -->
+            <div class="contacts-form-row" style="margin-bottom: 12px;">
+              <div class="contacts-form-group" style="margin-bottom: 0;">
+                <label class="contacts-form-label">Work Phone</label>
+                <select id="log-work-phone" class="contacts-input" style="height: 34px;">
+                  <!-- Populated by JS -->
+                </select>
+              </div>
+              <div class="contacts-form-group" style="margin-bottom: 0;">
+                <label class="contacts-form-label">Cell Phone</label>
+                <select id="log-cell-phone" class="contacts-input" style="height: 34px;">
+                  <!-- Populated by JS -->
+                </select>
+              </div>
+            </div>
+            <div id="log-custom-phones-container" class="contacts-form-row" style="margin-bottom: 12px; display: none;">
+              <div class="contacts-form-group" style="margin-bottom: 0;">
+                <label class="contacts-form-label">Custom Work Phone</label>
+                <input type="text" id="log-custom-work-phone" class="contacts-input" placeholder="Enter custom work phone...">
+              </div>
+              <div class="contacts-form-group" style="margin-bottom: 0;">
+                <label class="contacts-form-label">Custom Cell Phone</label>
+                <input type="text" id="log-custom-cell-phone" class="contacts-input" placeholder="Enter custom cell phone...">
+              </div>
+            </div>
+
+            <!-- Email & Address Dropdowns -->
+            <div class="contacts-form-row" style="margin-bottom: 12px;">
+              <div class="contacts-form-group" style="margin-bottom: 0;">
+                <label class="contacts-form-label">Email</label>
+                <select id="log-email" class="contacts-input" style="height: 34px;">
+                  <!-- Populated by JS -->
+                </select>
+              </div>
+              <div class="contacts-form-group" style="margin-bottom: 0;">
+                <label class="contacts-form-label">Address</label>
+                <select id="log-address" class="contacts-input" style="height: 34px;">
+                  <!-- Populated by JS -->
+                </select>
+              </div>
+            </div>
+            <div id="log-custom-email-address-container" class="contacts-form-row" style="margin-bottom: 12px; display: none;">
+              <div class="contacts-form-group" style="margin-bottom: 0;">
+                <label class="contacts-form-label">Custom Email</label>
+                <input type="email" id="log-custom-email" class="contacts-input" placeholder="Enter custom email...">
+              </div>
+              <div class="contacts-form-group" style="margin-bottom: 0;">
+                <label class="contacts-form-label">Custom Address</label>
+                <input type="text" id="log-custom-address" class="contacts-input" placeholder="Enter custom address...">
+              </div>
+            </div>
+            
+            <div class="contacts-form-group">
+              <label class="contacts-form-label">Conversation Details / Notes</label>
+              <textarea id="log-notes" class="contacts-textarea" placeholder="Summarize the discussion, next steps, or notes..."></textarea>
+            </div>
+            
+            <button id="add-log-btn" class="control-btn" style="width: 100%; border-color: var(--accent-magenta); color: var(--accent-magenta); background: transparent;">Add Contact Log Entry</button>
+          </form>
+        </div>
+
+        <div class="log-history-list">
+          ${logsHtml}
+        </div>
+      </div>
+    </div>
+  `;
+
+  // Initialize and synchronize fields
+  syncInteractionFields();
+}
+
 // Main Tab Router
 function renderActiveTab() {
   // Toggle tab button UI state
@@ -979,6 +2046,16 @@ function renderActiveTab() {
       }, 100);
     }
     renderZoningTab();
+  } else if (activeTab === 'contacts') {
+    if (appContainer) {
+      appContainer.classList.remove('full-width-financials');
+      // Trigger window resize event so Leaflet and Three.js adjust correctly
+      setTimeout(() => {
+        window.dispatchEvent(new Event('resize'));
+        if (map) map.invalidateSize();
+      }, 100);
+    }
+    renderContactsTab();
   } else {
     if (appContainer) {
       appContainer.classList.add('full-width-financials');
@@ -1014,22 +2091,79 @@ function renderZoningTab() {
   const remainingArea = Math.max(maxAllowedArea - builtArea, 0);
   const remainingFar = Math.max(maxFar - builtFar, 0).toFixed(2);
 
-  // Generate ZAP Projects list
+  // Generate ZAP Projects list (for NYC only)
   let zapHtml = '';
-  if (zapProjects && zapProjects.length > 0) {
-    zapHtml = zapProjects.map(proj => `
-      <div class="project-item ${proj.project_status === 'Active' ? 'active' : ''}">
-        <div class="project-header">
-          <span>${proj.project_name}</span>
-          <span style="color: ${proj.project_status === 'Active' ? 'var(--accent-green)' : 'var(--text-muted)'}">${proj.project_status}</span>
+  if (!plutoData.isNonNyc) {
+    if (zapProjects && zapProjects.length > 0) {
+      zapHtml = zapProjects.map(proj => `
+        <div class="project-item ${proj.project_status === 'Active' ? 'active' : ''}">
+          <div class="project-header">
+            <span>${proj.project_name}</span>
+            <span style="color: ${proj.project_status === 'Active' ? 'var(--accent-green)' : 'var(--text-muted)'}">${proj.project_status}</span>
+          </div>
+          <div class="project-desc">${proj.project_brief || 'No description provided.'}</div>
+          <div style="font-size: 10px; color: var(--text-muted); margin-top: 4px;">Filed: ${proj.app_filed_date ? proj.app_filed_date.substring(0, 10) : 'N/A'}</div>
         </div>
-        <div class="project-desc">${proj.project_brief || 'No description provided.'}</div>
-        <div style="font-size: 10px; color: var(--text-muted); margin-top: 4px;">Filed: ${proj.app_filed_date ? proj.app_filed_date.substring(0, 10) : 'N/A'}</div>
-      </div>
-    `).join('');
-  } else {
-    zapHtml = `<p style="font-size: 12px; color: var(--text-muted);">No zoning applications found for this lot.</p>`;
+      `).join('');
+    } else {
+      zapHtml = `<p style="font-size: 12px; color: var(--text-muted);">No zoning applications found for this lot.</p>`;
+    }
   }
+
+  // Generate Local Government Agency Portals
+  const city = plutoData.city || (plutoData.isNonNyc ? "" : "New York");
+  const state = plutoData.state || (plutoData.isNonNyc ? "" : "NY");
+  const postcode = plutoData.postcode || "";
+  const agencies = getLocalGovernmentAgencies(displayAddress, city, state, postcode);
+
+  const localPortalsCard = `
+    <div class="section-card highlight">
+      <div class="card-title">🏛️ Local Government Portals (${city || 'Local'}, ${state || 'Agency'})</div>
+      <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 12px;">
+        Queries are automatically pre-formatted and sent out to the local portals serving this property.
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 10px;">
+        <!-- Building Dept -->
+        <div style="background: rgba(255, 255, 255, 0.02); border: 1px solid var(--border-color); padding: 8px; border-radius: 6px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+            <span style="font-size: 11px; font-weight: 600; color: #fff;">Building & Permits</span>
+            <span style="font-size: 10px; color: var(--accent-cyan);">${agencies.building.name}</span>
+          </div>
+          <p style="font-size: 10px; color: var(--text-secondary); margin: 0 0 6px 0;">Search building permits, violations, and certificate of occupancy.</p>
+          <a class="control-btn" style="text-align: center; text-decoration: none; display: inline-block; padding: 4px 10px; font-size: 11px;" 
+             href="${agencies.building.url}" target="_blank" rel="noreferrer" referrerpolicy="no-referrer">
+             Query Building Dept ↗
+          </a>
+        </div>
+
+        <!-- Housing Dept -->
+        <div style="background: rgba(255, 255, 255, 0.02); border: 1px solid var(--border-color); padding: 8px; border-radius: 6px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+            <span style="font-size: 11px; font-weight: 600; color: #fff;">Housing & Community</span>
+            <span style="font-size: 10px; color: var(--accent-magenta);">${agencies.housing.name}</span>
+          </div>
+          <p style="font-size: 10px; color: var(--text-secondary); margin: 0 0 6px 0;">Search owner information, rent regulations, or building complaints.</p>
+          <a class="control-btn" style="text-align: center; text-decoration: none; display: inline-block; padding: 4px 10px; font-size: 11px; border-color: var(--accent-magenta); color: var(--accent-magenta); background: transparent;" 
+             href="${agencies.housing.url}" target="_blank" rel="noreferrer" referrerpolicy="no-referrer">
+             Query Housing Dept ↗
+          </a>
+        </div>
+
+        <!-- Planning & Zoning -->
+        <div style="background: rgba(255, 255, 255, 0.02); border: 1px solid var(--border-color); padding: 8px; border-radius: 6px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+            <span style="font-size: 11px; font-weight: 600; color: #fff;">Planning & Zoning Code</span>
+            <span style="font-size: 10px; color: var(--accent-amber);">${agencies.planning.name}</span>
+          </div>
+          <p style="font-size: 10px; color: var(--text-secondary); margin: 0 0 6px 0;">Search zoning maps, land use constraints, and setbacks.</p>
+          <a class="control-btn" style="text-align: center; text-decoration: none; display: inline-block; padding: 4px 10px; font-size: 11px; border-color: var(--accent-amber); color: var(--accent-amber); background: transparent;" 
+             href="${agencies.planning.url}" target="_blank" rel="noreferrer" referrerpolicy="no-referrer">
+             Query Planning Dept ↗
+          </a>
+        </div>
+      </div>
+    </div>
+  `;
 
   // Render Screen HTML (without print-only sections, as those will be compiled globally in print-package)
   reportPanel.innerHTML = `
@@ -1037,7 +2171,7 @@ function renderZoningTab() {
     <div class="section-card highlight">
       <div class="card-title">
         <span>Site Profile</span>
-        <span style="font-size: 10px; color: var(--text-muted);">BBL: ${bblStr}</span>
+        <span style="font-size: 10px; color: var(--text-muted);">${plutoData.isNonNyc ? 'US Property' : `BBL: ${bblStr}`}</span>
       </div>
       <div class="info-grid">
         <div class="info-row">
@@ -1138,23 +2272,22 @@ function renderZoningTab() {
       </div>
     </div>
 
-    <!-- ZAP Applications Card -->
+    <!-- ZAP Applications Card (NYC only) -->
+    ${!plutoData.isNonNyc ? `
     <div class="section-card">
       <div class="card-title">Zoning Applications (ZAP)</div>
       <div class="project-list">
         ${zapHtml}
       </div>
-    </div>
+    </div>` : ''}
 
-    <!-- External References -->
+    <!-- Local Government Portals Card -->
+    ${localPortalsCard}
+
+    <!-- Report Actions -->
     <div class="section-card" style="margin-bottom: 24px;">
-      <div class="card-title">External DOB Reference</div>
+      <div class="card-title">Report & Presentation</div>
       <div style="display: flex; flex-direction: column; gap: 8px;">
-        <a class="control-btn" style="text-align: center; text-decoration: none; display: block;" 
-           href="https://a810-bisweb.nyc.gov/bisweb/PropertyBrowseByBBLServlet?allborough=${boro}&allblock=${block}&alllot=${lot}&go5=%2BGO%2B&requestid=0" 
-           target="_blank" rel="noreferrer" referrerpolicy="no-referrer">
-           View Building Information System (BIS) ↗
-        </a>
         <a class="control-btn" style="text-align: center; text-decoration: none; display: block; border-color: var(--accent-magenta); color: var(--accent-magenta); background: transparent;" 
            onclick="window.print()">
            Print Presentation PDF Report
@@ -2543,6 +3676,15 @@ reportPanel.addEventListener('click', (e) => {
 
 // Inline inputs change listener
 reportPanel.addEventListener('change', (e) => {
+  if (e.target && e.target.id === 'log-spoke-with') {
+    syncInteractionFields();
+    return;
+  }
+  if (e.target && ['log-company', 'log-work-phone', 'log-cell-phone', 'log-email', 'log-address'].includes(e.target.id)) {
+    toggleCustomInputsVisibility();
+    return;
+  }
+
   // 1. General edit inputs (Cap Rate, LTC, Prior AV, discount rate, etc.)
   const input = e.target.closest('.inline-edit-input');
   if (input) {
@@ -2709,12 +3851,219 @@ reportPanel.addEventListener('change', (e) => {
     if (finContainer) {
       finContainer.innerHTML = renderFinancialsSubTabContent();
     }
+  }
+});
+
+// Click handler for contacts subform and logs
+reportPanel.addEventListener('click', (e) => {
+  // Set today datetime button click handler
+  if (e.target && e.target.id === 'set-today-btn') {
+    const logDatetimeInput = document.getElementById('log-datetime');
+    if (logDatetimeInput) {
+      const now = new Date();
+      const year = now.getFullYear();
+      const month = String(now.getMonth() + 1).padStart(2, '0');
+      const day = String(now.getDate()).padStart(2, '0');
+      const hours = String(now.getHours()).padStart(2, '0');
+      const minutes = String(now.getMinutes()).padStart(2, '0');
+      logDatetimeInput.value = `${year}-${month}-${day}T${hours}:${minutes}`;
+    }
+    return;
+  }
+
+  // Save contacts button click handler
+  if (e.target && e.target.id === 'save-contacts-btn') {
+    const newContacts = getContactsFromDOM();
+
+    const contactsData = getPropertyContactsData() || { logs: [] };
+    contactsData.contacts = newContacts;
+
+    // For backward compatibility keep the first owner and sales broker
+    const owner = newContacts.find(c => c.role === 'owner');
+    if (owner) {
+      contactsData.ownerFirstName = owner.firstName;
+      contactsData.ownerLastName = owner.lastName;
+    } else {
+      contactsData.ownerFirstName = '';
+      contactsData.ownerLastName = '';
+    }
+
+    const broker = newContacts.find(c => c.role === 'sales-broker');
+    if (broker) {
+      contactsData.salesBrokerFirstName = broker.firstName;
+      contactsData.salesBrokerLastName = broker.lastName;
+    } else {
+      contactsData.salesBrokerFirstName = '';
+      contactsData.salesBrokerLastName = '';
+    }
+
+    savePropertyContactsData(contactsData);
+
+    const feedback = document.getElementById('contacts-save-feedback');
+    if (feedback) {
+      feedback.innerHTML = `<div class="save-success-msg">✓ Contact information saved successfully!</div>`;
+      setTimeout(() => {
+        feedback.innerHTML = '';
+      }, 3000);
+    }
+    renderContactsTab();
+    return;
+  }
+
+  // Add contact field button click handler
+  if (e.target && e.target.id === 'add-contact-field-btn') {
+    const currentContacts = getContactsFromDOM();
+    
+    currentContacts.push({
+      firstName: '',
+      lastName: '',
+      role: 'other',
+      company: '',
+      workPhone: '',
+      cellPhone: '',
+      email: '',
+      address: ''
+    });
+    
+    const contactsData = getPropertyContactsData() || { logs: [] };
+    contactsData.contacts = currentContacts;
+    savePropertyContactsData(contactsData);
+    renderContactsTab();
+    return;
+  }
+
+  // Remove contact field button click handler
+  const removeContactBtn = e.target.closest('.remove-contact-btn');
+  if (removeContactBtn) {
+    const index = parseInt(removeContactBtn.dataset.index, 10);
+    const currentContacts = getContactsFromDOM().filter((_, i) => i !== index);
+    
+    const contactsData = getPropertyContactsData() || { logs: [] };
+    contactsData.contacts = currentContacts;
+    savePropertyContactsData(contactsData);
+    renderContactsTab();
+    return;
+  }
+
+  if (e.target && e.target.id === 'toggle-new-log-btn') {
+    const container = document.getElementById('new-log-form-container');
+    if (container.style.display === 'none') {
+      container.style.display = 'block';
+      e.target.innerText = '− Cancel';
+    } else {
+      container.style.display = 'none';
+      e.target.innerText = '+ New Interaction';
+    }
+    return;
+  }
+
+  // Add contact log button click handler
+  if (e.target && e.target.id === 'add-log-btn') {
+    const spokeWithSelect = document.getElementById('log-spoke-with');
+    const spokeWithValue = spokeWithSelect?.value || 'other';
+
+    const contactsData = getPropertyContactsData() || { logs: [] };
+    const ownerName = [contactsData.ownerFirstName, contactsData.ownerLastName].filter(Boolean).join(' ');
+    const brokerName = [contactsData.salesBrokerFirstName, contactsData.salesBrokerLastName].filter(Boolean).join(' ');
+
+    let spokeWith = '';
+    let role = '';
+    let company = '';
+    let workPhone = '';
+    let cellPhone = '';
+    let email = '';
+    let address = '';
+
+    if (spokeWithValue === 'owner') {
+      spokeWith = ownerName || 'Property Owner';
+      role = 'owner';
+    } else if (spokeWithValue === 'sales-broker') {
+      spokeWith = brokerName || 'Sales Broker';
+      role = 'sales-broker';
+    } else if (spokeWithValue.startsWith('saved|')) {
+      const parts = spokeWithValue.split('|');
+      spokeWith = parts[1];
+      role = parts[2] || 'other';
+    } else if (spokeWithValue.startsWith('contact|')) {
+      const parts = spokeWithValue.split('|');
+      spokeWith = parts[1];
+      role = parts[2] || 'other';
+    } else {
+      spokeWith = document.getElementById('log-custom-name')?.value.trim() || 'Other';
+    }
+
+    // Role
+    role = document.getElementById('log-role')?.value || 'other';
+
+    // Company
+    const companySelectVal = document.getElementById('log-company')?.value;
+    company = companySelectVal === 'custom' 
+      ? (document.getElementById('log-custom-company')?.value.trim() || '')
+      : (companySelectVal === 'none' ? '' : companySelectVal);
+
+    // Work Phone
+    const workPhoneSelectVal = document.getElementById('log-work-phone')?.value;
+    workPhone = workPhoneSelectVal === 'custom' 
+      ? (document.getElementById('log-custom-work-phone')?.value.trim() || '')
+      : (workPhoneSelectVal === 'none' ? '' : workPhoneSelectVal);
+
+    // Cell Phone
+    const cellPhoneSelectVal = document.getElementById('log-cell-phone')?.value;
+    cellPhone = cellPhoneSelectVal === 'custom' 
+      ? (document.getElementById('log-custom-cell-phone')?.value.trim() || '')
+      : (cellPhoneSelectVal === 'none' ? '' : cellPhoneSelectVal);
+
+    // Email
+    const emailSelectVal = document.getElementById('log-email')?.value;
+    email = emailSelectVal === 'custom' 
+      ? (document.getElementById('log-custom-email')?.value.trim() || '')
+      : (emailSelectVal === 'none' ? '' : emailSelectVal);
+
+    // Address
+    const addressSelectVal = document.getElementById('log-address')?.value;
+    address = addressSelectVal === 'custom' 
+      ? (document.getElementById('log-custom-address')?.value.trim() || '')
+      : (addressSelectVal === 'none' ? '' : addressSelectVal);
+
+    const dateTime = document.getElementById('log-datetime')?.value || new Date().toISOString();
+    const notes = document.getElementById('log-notes')?.value || '';
+
+    contactsData.logs.push({
+      id: String(Date.now()),
+      spokeWith,
+      role,
+      company,
+      workPhone,
+      cellPhone,
+      email,
+      address,
+      dateTime,
+      notes
+    });
+
+    savePropertyContactsData(contactsData);
+    renderContactsTab();
+    return;
+  }
+
+  // Delete contact log entry button click handler
+  const deleteLogBtn = e.target.closest('.log-delete-btn');
+  if (deleteLogBtn) {
+    const id = deleteLogBtn.dataset.id;
+    const contactsData = getPropertyContactsData() || { ownerFirstName: '', ownerLastName: '', salesBrokerFirstName: '', salesBrokerLastName: '', logs: [] };
+    contactsData.logs = contactsData.logs.filter(log => String(log.id || log.dateTime) !== String(id));
+    savePropertyContactsData(contactsData);
+    renderContactsTab();
     return;
   }
 });
 
 // Run Tab Button Listener initialization
 setupTabListeners();
+
+// Initialize Saved Locations UI and Events
+renderSavedLocationsList();
+setupSavedLocationsEvents();
 
 // Viewport Sizing Mode Handlers
 const viewportsContainer = document.querySelector('.viewports-container');
