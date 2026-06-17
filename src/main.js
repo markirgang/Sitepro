@@ -1880,25 +1880,39 @@ function renderContactsTab() {
 
   reportPanel.innerHTML = `
     <!-- Property Contact Details Card -->
-    <div class="section-card highlight">
-      <div class="card-title">
-        <span>Property Contact Info</span>
-        <span style="font-size: 10px; color: var(--text-muted);">${displayAddress}</span>
-      </div>
-      
-      <form id="property-contacts-form" onsubmit="event.preventDefault();">
-        <div id="saved-contacts-list">
-          ${contactsInputsHtml}
+    <div class="section-card highlight" style="padding-bottom: 12px; min-height: 100%;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+        <div class="card-title" style="margin-bottom: 0;">
+          <span>Contact Logs & History</span>
+          <span style="font-size: 10px; color: var(--text-muted); display: block; margin-top: 4px; font-weight: normal;">${displayAddress}</span>
         </div>
-        
-        <button id="add-contact-field-btn" class="control-btn" type="button" style="width: 100%; margin-bottom: 12px; border-color: var(--accent-cyan); color: var(--accent-cyan); background: transparent;">+ Add Contact</button>
-        
-        <button id="save-contacts-btn" class="control-btn active" style="width: 100%; margin-top: 8px;">Save Contact Information</button>
-        <div id="contacts-save-feedback"></div>
-      </form>
+        <button id="open-contacts-modal-btn" class="control-btn" style="padding: 6px 12px; font-size: 11px; height: auto;">Manage Contacts</button>
+      </div>
+
+      <!-- Contact Info Modal -->
+      <div id="property-contacts-modal" class="contact-modal-overlay">
+        <div class="contact-modal-content">
+          <div class="contact-modal-header">
+            <span class="contact-modal-title">Property Contact Info</span>
+            <button class="contact-modal-close" id="close-contacts-modal-btn" type="button">✕</button>
+          </div>
+          <div class="contact-modal-body">
+            <form id="property-contacts-form" onsubmit="event.preventDefault();">
+              <div id="saved-contacts-list">
+                ${contactsInputsHtml}
+              </div>
+              
+              <button id="add-contact-field-btn" class="control-btn" type="button" style="width: 100%; margin-bottom: 12px; border-color: var(--accent-cyan); color: var(--accent-cyan); background: transparent;">+ Add Contact</button>
+              
+              <button id="save-contacts-btn" class="control-btn active" style="width: 100%; margin-top: 8px;">Save Contact Information</button>
+              <div id="contacts-save-feedback"></div>
+            </form>
+          </div>
+        </div>
+      </div>
 
       <!-- Contact Logs History Subform -->
-      <div style="margin-top: 24px; margin-bottom: 16px; padding: 12px; background: rgba(255, 255, 255, 0.02); border: 1px solid var(--border-color); border-radius: 8px; position: relative;">
+      <div style="padding: 12px; background: rgba(255, 255, 255, 0.02); border: 1px solid var(--border-color); border-radius: 8px; position: relative;">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
           <span style="font-size: 11px; font-weight: 600; color: var(--accent-cyan);">Interaction History</span>
           <button type="button" id="toggle-new-log-btn" style="background: transparent; border: 1px solid var(--accent-cyan); color: var(--accent-cyan); border-radius: 4px; padding: 2px 8px; font-size: 10px; cursor: pointer;">+ New Interaction</button>
@@ -2021,6 +2035,35 @@ function renderContactsTab() {
 
   // Initialize and synchronize fields
   syncInteractionFields();
+
+  // Modal event listeners
+  const modalOverlay = document.getElementById('property-contacts-modal');
+  const openModalBtn = document.getElementById('open-contacts-modal-btn');
+  const closeModalBtn = document.getElementById('close-contacts-modal-btn');
+
+  if (openModalBtn && modalOverlay) {
+    openModalBtn.addEventListener('click', () => {
+      modalOverlay.classList.add('active');
+    });
+  }
+
+  if (closeModalBtn && modalOverlay) {
+    closeModalBtn.addEventListener('click', () => {
+      modalOverlay.classList.remove('active');
+      // Re-render tab on close to ensure new contacts appear in dropdowns
+      renderContactsTab();
+    });
+  }
+
+  // Close modal when clicking outside content
+  if (modalOverlay) {
+    modalOverlay.addEventListener('click', (e) => {
+      if (e.target === modalOverlay) {
+        modalOverlay.classList.remove('active');
+        renderContactsTab();
+      }
+    });
+  }
 }
 
 // Main Tab Router
