@@ -48,6 +48,8 @@
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" 
         integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
   
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
+  <script src="https://apis.google.com/js/api.js"></script>
   <link rel="stylesheet" href="/src/style.css">
 </head>
 <body>
@@ -66,12 +68,195 @@
       
       <!-- Search Input Section -->
       <section class="search-section">
-        <div class="search-input-wrapper">
+        <div class="search-tabs">
+          <button class="search-tab-btn active" id="tab-search-address" type="button">Address / BBL</button>
+          <button class="search-tab-btn" id="tab-search-bbl" type="button">Block & Lot</button>
+          <button class="search-tab-btn" id="tab-search-properties" type="button">Search Properties</button>
+        </div>
+
+        <div class="search-input-wrapper" id="address-search-wrapper">
           <span class="search-icon">🔍</span>
           <input type="text" id="site-search-input" class="search-input" 
                  placeholder="Search address or BBL (e.g. 350 Fifth Ave)..." autocomplete="off">
           <button id="save-location-btn" class="save-location-btn" title="Save this location" style="display: none;">⭐</button>
         </div>
+
+        <div class="bbl-search-wrapper" id="bbl-search-wrapper" style="display: none;">
+          <div class="bbl-inputs-row">
+            <select id="bbl-borough" class="bbl-select" aria-label="NYC Borough">
+              <option value="" disabled selected>Borough</option>
+              <option value="1">Manhattan</option>
+              <option value="2">Bronx</option>
+              <option value="3">Brooklyn</option>
+              <option value="4">Queens</option>
+              <option value="5">Staten Island</option>
+            </select>
+            <input type="number" id="bbl-block" class="bbl-input" placeholder="Block" min="1" max="99999" aria-label="Block">
+            <input type="number" id="bbl-lot" class="bbl-input" placeholder="Lot" min="1" max="9999" aria-label="Lot">
+            <button id="bbl-search-btn" class="bbl-search-btn" type="button">Search</button>
+          </div>
+          <div id="bbl-error-msg" class="bbl-error-msg"></div>
+        </div>
+
+        <!-- Filter Search Wrapper -->
+        <div class="properties-search-wrapper" id="properties-search-wrapper" style="display: none;">
+          <div class="filter-row">
+            <div class="filter-group">
+              <label for="filter-state">State</label>
+              <select id="filter-state" class="filter-select">
+                <option value="">All States</option>
+                <option value="NY">New York (NY)</option>
+                <option value="CA">California (CA)</option>
+                <option value="TX">Texas (TX)</option>
+                <option value="FL">Florida (FL)</option>
+                <option value="MA">Massachusetts (MA)</option>
+                <option value="IL">Illinois (IL)</option>
+                <option value="WA">Washington (WA)</option>
+                <option value="CO">Colorado (CO)</option>
+              </select>
+            </div>
+            <div class="filter-group">
+              <label for="filter-city">City / Borough</label>
+              <select id="filter-city" class="filter-select">
+                <option value="">All Cities</option>
+                <option value="NYC">New York City (All)</option>
+                <option value="MN">Manhattan</option>
+                <option value="BK">Brooklyn</option>
+                <option value="QN">Queens</option>
+                <option value="BX">Bronx</option>
+                <option value="SI">Staten Island</option>
+                <option value="San Francisco">San Francisco</option>
+                <option value="Los Angeles">Los Angeles</option>
+                <option value="Boston">Boston</option>
+                <option value="Chicago">Chicago</option>
+                <option value="Austin">Austin</option>
+                <option value="Houston">Houston</option>
+                <option value="Miami">Miami</option>
+                <option value="Seattle">Seattle</option>
+                <option value="Denver">Denver</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="filter-row">
+            <div class="filter-group">
+              <label for="filter-sqft-min">Min Sq Ft</label>
+              <select id="filter-sqft-min" class="filter-select">
+                <option value="">Any Min</option>
+                <option value="1000">1,000 SF</option>
+                <option value="5000">5,000 SF</option>
+                <option value="10000">10,000 SF</option>
+                <option value="25000">25,000 SF</option>
+                <option value="50000">50,000 SF</option>
+                <option value="100000">100,000 SF</option>
+                <option value="250000">250,000 SF</option>
+                <option value="500000">500,000 SF</option>
+              </select>
+            </div>
+            <div class="filter-group">
+              <label for="filter-sqft-max">Max Sq Ft</label>
+              <select id="filter-sqft-max" class="filter-select">
+                <option value="">Any Max</option>
+                <option value="5000">5,000 SF</option>
+                <option value="10000">10,000 SF</option>
+                <option value="25000">25,000 SF</option>
+                <option value="50000">50,000 SF</option>
+                <option value="100000">100,000 SF</option>
+                <option value="250000">250,000 SF</option>
+                <option value="500000">500,000 SF</option>
+                <option value="1000000">1,000,000 SF</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="filter-row">
+            <div class="filter-group">
+              <label for="filter-price-min">Min Price</label>
+              <select id="filter-price-min" class="filter-select">
+                <option value="">Any Min</option>
+                <option value="500000">$500,000</option>
+                <option value="1000000">$1,000,000</option>
+                <option value="2500000">$2,500,000</option>
+                <option value="5000000">$5,000,000</option>
+                <option value="10000000">$10,000,000</option>
+                <option value="25000000">$25,000,000</option>
+                <option value="50000000">$50,000,000</option>
+                <option value="100000000">$100,000,000</option>
+              </select>
+            </div>
+            <div class="filter-group">
+              <label for="filter-price-max">Max Price</label>
+              <select id="filter-price-max" class="filter-select">
+                <option value="">Any Max</option>
+                <option value="1000000">$1,000,000</option>
+                <option value="2500000">$2,500,000</option>
+                <option value="5000000">$5,000,000</option>
+                <option value="10000000">$10,000,000</option>
+                <option value="25000000">$25,000,000</option>
+                <option value="50000000">$50,000,000</option>
+                <option value="100000000">$100,000,000</option>
+                <option value="500000000">$500,000,000</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="filter-row">
+            <div class="filter-group">
+              <label for="filter-prop-type">Property Type</label>
+              <select id="filter-prop-type" class="filter-select">
+                <option value="">All Types</option>
+                <option value="office">Office Building</option>
+                <option value="apartment">Apartment Building</option>
+                <option value="shopping_center">Shopping Center</option>
+                <option value="vacant">Vacant Land</option>
+              </select>
+            </div>
+            <div class="filter-group">
+              <label for="filter-zoning-type">Zoning Type</label>
+              <select id="filter-zoning-type" class="filter-select">
+                <option value="">All Zoning</option>
+                <option value="commercial">Commercial</option>
+                <option value="residential">Residential</option>
+                <option value="manufacturing">Manufacturing</option>
+                <option value="mixed-use">Mixed-Use</option>
+              </select>
+            </div>
+          </div>
+
+          <button id="properties-search-btn" class="properties-search-btn" type="button">Find Properties</button>
+          <div id="properties-error-msg" class="properties-error-msg"></div>
+
+          <!-- External Databases Deep Links -->
+          <div id="external-db-links" class="external-db-links" style="display: none;">
+            <div class="external-links-group">
+              <div class="external-links-title">Property Databases</div>
+              <div class="external-links-grid">
+                <a id="link-crexi" href="#" target="_blank" class="ext-db-btn crexi-btn">Crexi ↗</a>
+                <a id="link-loopnet" href="#" target="_blank" class="ext-db-btn loopnet-btn">LoopNet ↗</a>
+                <a id="link-costar" href="https://www.costar.com" target="_blank" class="ext-db-btn costar-btn">CoStar ↗</a>
+                <a id="link-zillow" href="#" target="_blank" class="ext-db-btn zillow-btn">Zillow ↗</a>
+                <a id="link-redfin" href="#" target="_blank" class="ext-db-btn redfin-btn">Redfin ↗</a>
+                <a id="link-realtor" href="#" target="_blank" class="ext-db-btn realtor-btn">Realtor ↗</a>
+              </div>
+            </div>
+            
+            <div class="external-links-group" style="margin-top: 12px;">
+              <div class="external-links-title">Big Broker Sites</div>
+              <div class="external-links-grid">
+                <a id="link-cbre" href="#" target="_blank" class="ext-db-btn cbre-btn">CBRE ↗</a>
+                <a id="link-jll" href="#" target="_blank" class="ext-db-btn jll-btn">JLL ↗</a>
+                <a id="link-cushman" href="#" target="_blank" class="ext-db-btn cushman-btn">Cushman ↗</a>
+                <a id="link-colliers" href="#" target="_blank" class="ext-db-btn colliers-btn">Colliers ↗</a>
+                <a id="link-marcus" href="#" target="_blank" class="ext-db-btn marcus-btn">Marcus & M. ↗</a>
+                <a id="link-newmark" href="#" target="_blank" class="ext-db-btn newmark-btn">Newmark ↗</a>
+              </div>
+            </div>
+          </div>
+          
+          <!-- Results list -->
+          <div id="properties-results-list" class="properties-results-list" style="display: none;"></div>
+        </div>
+
         <!-- Autocomplete Suggestions Dropdown -->
         <div id="autocomplete-dropdown" class="autocomplete-dropdown"></div>
       </section>
@@ -85,6 +270,7 @@
       <!-- Tab Navigation Section -->
       <nav class="sidebar-tabs" id="sidebar-tabs" style="display: none;">
         <button class="tab-btn active" data-tab="zoning">Zoning & Massing</button>
+        <button class="tab-btn" data-tab="comps">Comparable Sales</button>
         <button class="tab-btn" data-tab="contacts">Contact Logs</button>
         <button class="tab-btn" data-tab="financials">Financial Underwriting</button>
       </nav>

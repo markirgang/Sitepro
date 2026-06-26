@@ -3,6 +3,7 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { getZoningRules, calculateDevelopmentRights } from './zoningRules.js';
 import { financialData } from './financialData.js';
 import { estimateFinancials, recalculateUnderwriting } from './financialRules.js';
+import { fetchLiveLandComps } from './compsData.js';
 
 // Application state
 let currentBBL = null;
@@ -86,6 +87,32 @@ function initAssumptions(bblStr, lotArea, zoningRules) {
 const searchInput = document.getElementById('site-search-input');
 const autocompleteDropdown = document.getElementById('autocomplete-dropdown');
 const reportPanel = document.getElementById('report-panel');
+
+// BBL Search UI Elements
+const tabAddress = document.getElementById('tab-search-address');
+const tabBBL = document.getElementById('tab-search-bbl');
+const addressSearchWrapper = document.getElementById('address-search-wrapper');
+const bblSearchWrapper = document.getElementById('bbl-search-wrapper');
+const bblBorough = document.getElementById('bbl-borough');
+const bblBlock = document.getElementById('bbl-block');
+const bblLot = document.getElementById('bbl-lot');
+const bblSearchBtn = document.getElementById('bbl-search-btn');
+const bblErrorMsg = document.getElementById('bbl-error-msg');
+
+// Property Search UI Elements
+const tabProperties = document.getElementById('tab-search-properties');
+const propertiesSearchWrapper = document.getElementById('properties-search-wrapper');
+const filterState = document.getElementById('filter-state');
+const filterCity = document.getElementById('filter-city');
+const filterSqftMin = document.getElementById('filter-sqft-min');
+const filterSqftMax = document.getElementById('filter-sqft-max');
+const filterPriceMin = document.getElementById('filter-price-min');
+const filterPriceMax = document.getElementById('filter-price-max');
+const filterPropType = document.getElementById('filter-prop-type');
+const filterZoningType = document.getElementById('filter-zoning-type');
+const propertiesSearchBtn = document.getElementById('properties-search-btn');
+const propertiesErrorMsg = document.getElementById('properties-error-msg');
+const propertiesResultsList = document.getElementById('properties-results-list');
 
 // GIS Map
 let map = null;
@@ -380,6 +407,694 @@ function getLocalGovernmentAgencies(address, city, state, postcode) {
   };
 }
 
+// BBL & Address Search Tab switching & Search logic
+if (tabAddress && tabBBL && tabProperties) {
+  tabAddress.addEventListener('click', () => {
+    tabAddress.classList.add('active');
+    tabBBL.classList.remove('active');
+    tabProperties.classList.remove('active');
+    addressSearchWrapper.style.display = 'block';
+    bblSearchWrapper.style.display = 'none';
+    propertiesSearchWrapper.style.display = 'none';
+    autocompleteDropdown.style.display = 'none';
+    if (bblErrorMsg) bblErrorMsg.style.display = 'none';
+    if (propertiesErrorMsg) propertiesErrorMsg.style.display = 'none';
+  });
+
+  tabBBL.addEventListener('click', () => {
+    tabBBL.classList.add('active');
+    tabAddress.classList.remove('active');
+    tabProperties.classList.remove('active');
+    addressSearchWrapper.style.display = 'none';
+    bblSearchWrapper.style.display = 'block';
+    propertiesSearchWrapper.style.display = 'none';
+    autocompleteDropdown.style.display = 'none';
+    if (propertiesErrorMsg) propertiesErrorMsg.style.display = 'none';
+  });
+
+  tabProperties.addEventListener('click', () => {
+    tabProperties.classList.add('active');
+    tabAddress.classList.remove('active');
+    tabBBL.classList.remove('active');
+    addressSearchWrapper.style.display = 'none';
+    bblSearchWrapper.style.display = 'none';
+    propertiesSearchWrapper.style.display = 'block';
+    autocompleteDropdown.style.display = 'none';
+    if (bblErrorMsg) bblErrorMsg.style.display = 'none';
+  });
+}
+
+function updateCityDropdown(state) {
+  if (!filterCity) return;
+  const prevVal = filterCity.value;
+  filterCity.innerHTML = '';
+  const options = [{ value: '', text: 'All Cities / Boroughs' }];
+
+  if (!state) {
+    options.push(
+      { value: 'NYC', text: 'New York City (All)' },
+      { value: 'MN', text: 'Manhattan, NY' },
+      { value: 'BK', text: 'Brooklyn, NY' },
+      { value: 'QN', text: 'Queens, NY' },
+      { value: 'BX', text: 'Bronx, NY' },
+      { value: 'SI', text: 'Staten Island, NY' },
+      { value: 'San Francisco', text: 'San Francisco, CA' },
+      { value: 'Los Angeles', text: 'Los Angeles, CA' },
+      { value: 'Boston', text: 'Boston, MA' },
+      { value: 'Chicago', text: 'Chicago, IL' },
+      { value: 'Austin', text: 'Austin, TX' },
+      { value: 'Houston', text: 'Houston, TX' },
+      { value: 'Miami', text: 'Miami, FL' },
+      { value: 'Seattle', text: 'Seattle, WA' },
+      { value: 'Denver', text: 'Denver, CO' }
+    );
+  } else if (state === 'NY') {
+    options.push(
+      { value: 'NYC', text: 'New York City (All)' },
+      { value: 'MN', text: 'Manhattan' },
+      { value: 'BK', text: 'Brooklyn' },
+      { value: 'QN', text: 'Queens' },
+      { value: 'BX', text: 'Bronx' },
+      { value: 'SI', text: 'Staten Island' }
+    );
+  } else if (state === 'CA') {
+    options.push(
+      { value: 'San Francisco', text: 'San Francisco' },
+      { value: 'Los Angeles', text: 'Los Angeles' }
+    );
+  } else if (state === 'TX') {
+    options.push(
+      { value: 'Austin', text: 'Austin' },
+      { value: 'Houston', text: 'Houston' }
+    );
+  } else if (state === 'FL') {
+    options.push({ value: 'Miami', text: 'Miami' });
+  } else if (state === 'MA') {
+    options.push({ value: 'Boston', text: 'Boston' });
+  } else if (state === 'IL') {
+    options.push({ value: 'Chicago', text: 'Chicago' });
+  } else if (state === 'WA') {
+    options.push({ value: 'Seattle', text: 'Seattle' });
+  } else if (state === 'CO') {
+    options.push({ value: 'Denver', text: 'Denver' });
+  }
+
+  options.forEach(opt => {
+    const el = document.createElement('option');
+    el.value = opt.value;
+    el.textContent = opt.text;
+    filterCity.appendChild(el);
+  });
+
+  const exists = Array.from(filterCity.options).some(o => o.value === prevVal);
+  if (exists) {
+    filterCity.value = prevVal;
+  } else {
+    filterCity.value = '';
+  }
+}
+
+if (filterState) {
+  filterState.addEventListener('change', (e) => {
+    updateCityDropdown(e.target.value);
+  });
+  updateCityDropdown('');
+}
+
+function showBBLError(msg) {
+  if (bblErrorMsg) {
+    bblErrorMsg.innerText = msg;
+    bblErrorMsg.style.display = 'block';
+  }
+}
+
+function executeBBLSearch() {
+  if (bblErrorMsg) {
+    bblErrorMsg.style.display = 'none';
+    bblErrorMsg.innerText = '';
+  }
+
+  const boro = bblBorough ? bblBorough.value : '';
+  const blockVal = bblBlock ? bblBlock.value.trim() : '';
+  const lotVal = bblLot ? bblLot.value.trim() : '';
+
+  if (!boro) {
+    showBBLError('Please select a borough.');
+    return;
+  }
+  if (!blockVal || isNaN(blockVal) || parseInt(blockVal, 10) <= 0) {
+    showBBLError('Please enter a valid Block number.');
+    return;
+  }
+  if (!lotVal || isNaN(lotVal) || parseInt(lotVal, 10) <= 0) {
+    showBBLError('Please enter a valid Lot number.');
+    return;
+  }
+
+  const blockNum = parseInt(blockVal, 10);
+  const lotNum = parseInt(lotVal, 10);
+
+  if (blockNum > 99999) {
+    showBBLError('Block number cannot exceed 99999.');
+    return;
+  }
+  if (lotNum > 9999) {
+    showBBLError('Lot number cannot exceed 9999.');
+    return;
+  }
+
+  // Construct 10-digit BBL: 1-digit Borough + 5-digit Block + 4-digit Lot
+  const formattedBBL = `${boro}${String(blockNum).padStart(5, '0')}${String(lotNum).padStart(4, '0')}`;
+  
+  // Call loadSite
+  loadSite(formattedBBL);
+}
+
+if (bblSearchBtn) {
+  bblSearchBtn.addEventListener('click', executeBBLSearch);
+}
+
+[bblBlock, bblLot].forEach(inputEl => {
+  if (inputEl) {
+    inputEl.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        executeBBLSearch();
+      }
+    });
+  }
+});
+
+function showPropertiesError(msg) {
+  if (propertiesErrorMsg) {
+    propertiesErrorMsg.innerText = msg;
+    propertiesErrorMsg.style.display = 'block';
+  }
+}
+
+async function executePropertiesSearch() {
+  if (propertiesErrorMsg) {
+    propertiesErrorMsg.style.display = 'none';
+    propertiesErrorMsg.innerText = '';
+  }
+  if (propertiesResultsList) {
+    propertiesResultsList.style.display = 'none';
+    propertiesResultsList.innerHTML = '';
+  }
+
+  const stateVal = filterState ? filterState.value : '';
+  const cityVal = filterCity ? filterCity.value : '';
+  const sqftMinVal = filterSqftMin && filterSqftMin.value ? parseFloat(filterSqftMin.value) : 0;
+  const sqftMaxVal = filterSqftMax && filterSqftMax.value ? parseFloat(filterSqftMax.value) : Infinity;
+  const priceMinVal = filterPriceMin && filterPriceMin.value ? parseFloat(filterPriceMin.value) : 0;
+  const priceMaxVal = filterPriceMax && filterPriceMax.value ? parseFloat(filterPriceMax.value) : Infinity;
+  const propType = filterPropType ? filterPropType.value : '';
+  const zoningType = filterZoningType ? filterZoningType.value : '';
+
+  // Show loading indicator
+  if (propertiesResultsList) {
+    propertiesResultsList.style.display = 'flex';
+    propertiesResultsList.innerHTML = `
+      <div style="text-align: center; padding: 20px; color: var(--text-secondary); width: 100%;">
+        <div style="font-size: 18px; margin-bottom: 6px; animation: spin 2s linear infinite; display: inline-block;">⏳</div>
+        <div>Searching matching properties...</div>
+      </div>
+    `;
+  }
+
+  const estMarketMultiplier = 2.22; // Assessed value is roughly 45% of market value for classes 2 & 4
+
+  function getCrexiSearchUrl(state, city, propType, priceMin, priceMax, sqftMin, sqftMax) {
+    let url = 'https://www.crexi.com/properties/for-sale';
+    const query = [];
+    let locParts = [];
+    if (city && city !== 'NYC' && !['MN', 'BK', 'QN', 'BX', 'SI'].includes(city)) {
+      locParts.push(city);
+    } else if (city && ['MN', 'BK', 'QN', 'BX', 'SI'].includes(city)) {
+      const boroNames = { 'MN': 'Manhattan', 'BK': 'Brooklyn', 'QN': 'Queens', 'BX': 'Bronx', 'SI': 'Staten Island' };
+      locParts.push(boroNames[city] || city);
+      locParts.push('New York');
+    } else if (city === 'NYC') {
+      locParts.push('New York City');
+    }
+    if (state) {
+      locParts.push(state);
+    } else if (city && !state) {
+      if (['NYC', 'MN', 'BK', 'QN', 'BX', 'SI'].includes(city)) locParts.push('NY');
+    }
+    
+    if (locParts.length > 0) {
+      query.push(`location=${encodeURIComponent(locParts.join(', '))}`);
+    }
+    if (propType) {
+      const typeMap = { 'office': 'office', 'apartment': 'multifamily', 'shopping_center': 'retail', 'vacant': 'land' };
+      if (typeMap[propType]) query.push(`types=${typeMap[propType]}`);
+    }
+    if (priceMin) query.push(`priceMin=${priceMin}`);
+    if (priceMax && priceMax < Infinity) query.push(`priceMax=${priceMax}`);
+    if (sqftMin) query.push(`sqftMin=${sqftMin}`);
+    if (sqftMax && sqftMax < Infinity) query.push(`sqftMax=${sqftMax}`);
+    
+    return query.length > 0 ? `${url}?${query.join('&')}` : url;
+  }
+
+  function getLoopNetSearchUrl(state, city, propType, priceMin, priceMax, sqftMin, sqftMax) {
+    let baseUrl = 'https://www.loopnet.com/search/commercial-real-estate/';
+    let locPath = '';
+    
+    let resolvedCity = city;
+    if (city && ['MN', 'BK', 'QN', 'BX', 'SI'].includes(city)) {
+      const boroNames = { 'MN': 'manhattan', 'BK': 'brooklyn', 'QN': 'queens', 'BX': 'bronx', 'SI': 'staten-island' };
+      resolvedCity = boroNames[city];
+    } else if (city === 'NYC') {
+      resolvedCity = 'new-york';
+    }
+    
+    if (resolvedCity && state) {
+      locPath = `${resolvedCity.toLowerCase().replace(/\s+/g, '-')}-${state.toLowerCase()}/`;
+    } else if (state) {
+      locPath = `${state.toLowerCase()}/`;
+    } else if (resolvedCity) {
+      const stateSuffix = ['NYC', 'manhattan', 'brooklyn', 'queens', 'bronx', 'staten-island'].includes(resolvedCity.toLowerCase()) ? '-ny' : '';
+      locPath = `${resolvedCity.toLowerCase().replace(/\s+/g, '-')}${stateSuffix}/`;
+    }
+    
+    let url = `${baseUrl}${locPath}for-sale/`;
+    const query = [];
+    if (propType) {
+      const typeMap = { 'office': 'office', 'apartment': 'multifamily', 'shopping_center': 'retail', 'vacant': 'land' };
+      if (typeMap[propType]) query.push(`property-type=${typeMap[propType]}`);
+    }
+    return query.length > 0 ? `${url}?${query.join('&')}` : url;
+  }
+
+  function getZillowSearchUrl(state, city, propType, priceMin, priceMax, sqftMin, sqftMax) {
+    let resolvedCity = city;
+    if (city && ['MN', 'BK', 'QN', 'BX', 'SI'].includes(city)) {
+      const boroNames = { 'MN': 'Manhattan', 'BK': 'Brooklyn', 'QN': 'Queens', 'BX': 'Bronx', 'SI': 'Staten Island' };
+      resolvedCity = boroNames[city];
+    } else if (city === 'NYC') {
+      resolvedCity = 'New York City';
+    }
+    
+    let locationStr = '';
+    if (resolvedCity && state) {
+      locationStr = `${resolvedCity}, ${state}`;
+    } else if (state) {
+      locationStr = state;
+    } else if (resolvedCity) {
+      locationStr = resolvedCity;
+    }
+
+    if (!locationStr) {
+      return 'https://www.zillow.com';
+    }
+
+    return `https://www.zillow.com/homes/for_sale/${encodeURIComponent(locationStr)}_rb/`;
+  }
+
+  function getRedfinSearchUrl(state, city, propType, priceMin, priceMax, sqftMin, sqftMax) {
+    let resolvedCity = city;
+    if (city && ['MN', 'BK', 'QN', 'BX', 'SI'].includes(city)) {
+      const boroNames = { 'MN': 'Manhattan', 'BK': 'Brooklyn', 'QN': 'Queens', 'BX': 'Bronx', 'SI': 'Staten Island' };
+      resolvedCity = boroNames[city];
+    } else if (city === 'NYC') {
+      resolvedCity = 'New York City';
+    }
+    
+    let locationStr = '';
+    if (resolvedCity && state) {
+      locationStr = `${resolvedCity}, ${state}`;
+    } else if (state) {
+      locationStr = state;
+    } else if (resolvedCity) {
+      locationStr = resolvedCity;
+    }
+
+    if (!locationStr) {
+      return 'https://www.redfin.com';
+    }
+
+    return `https://www.redfin.com/search?query=${encodeURIComponent(locationStr)}`;
+  }
+
+  function getRealtorSearchUrl(state, city, propType, priceMin, priceMax, sqftMin, sqftMax) {
+    let resolvedCity = city;
+    if (city && ['MN', 'BK', 'QN', 'BX', 'SI'].includes(city)) {
+      const boroNames = { 'MN': 'Manhattan', 'BK': 'Brooklyn', 'QN': 'Queens', 'BX': 'Bronx', 'SI': 'Staten Island' };
+      resolvedCity = boroNames[city];
+    } else if (city === 'NYC') {
+      resolvedCity = 'New York City';
+    }
+    
+    let locationStr = '';
+    if (resolvedCity && state) {
+      locationStr = `${resolvedCity}, ${state}`;
+    } else if (state) {
+      locationStr = state;
+    } else if (resolvedCity) {
+      locationStr = resolvedCity;
+    }
+
+    if (!locationStr) {
+      return 'https://www.realtor.com';
+    }
+
+    return `https://www.realtor.com/realestateandhomes-search/${encodeURIComponent(locationStr.replace(/\s+/g, '-'))}`;
+  }
+
+  function getBrokerSearchUrl(brokerKey, state, city, propType) {
+    const brokerUrls = {
+      'cbre': 'https://www.cbre.com/properties',
+      'jll': 'https://www.us.jll.com/en/properties',
+      'cushman': 'https://www.cushmanwakefield.com/en/united-states/properties',
+      'colliers': 'https://www.colliers.com/en-us/properties',
+      'marcus': 'https://www.marcusmillichap.com/properties',
+      'newmark': 'https://www.nmrk.com/properties'
+    };
+
+    let resolvedCity = city;
+    if (city && ['MN', 'BK', 'QN', 'BX', 'SI'].includes(city)) {
+      const boroNames = { 'MN': 'Manhattan', 'BK': 'Brooklyn', 'QN': 'Queens', 'BX': 'Bronx', 'SI': 'Staten Island' };
+      resolvedCity = boroNames[city];
+    } else if (city === 'NYC') {
+      resolvedCity = 'New York';
+    }
+
+    const locParts = [];
+    if (resolvedCity) locParts.push(resolvedCity);
+    if (state) locParts.push(state);
+    const locationStr = locParts.join(', ');
+
+    if (!locationStr) {
+      return brokerUrls[brokerKey] || '#';
+    }
+
+    const brokerDomains = {
+      'cbre': 'cbre.com/properties',
+      'jll': 'us.jll.com/en/properties',
+      'cushman': 'cushmanwakefield.com/en/united-states/properties',
+      'colliers': 'colliers.com/en-us/properties',
+      'marcus': 'marcusmillichap.com/properties',
+      'newmark': 'nmrk.com/properties'
+    };
+
+    const domain = brokerDomains[brokerKey];
+    let queryStr = `site:${domain} "${resolvedCity || ''}" ${state || ''}`;
+    if (propType) {
+      queryStr += ` "${propType}"`;
+    }
+    
+    return `https://www.google.com/search?q=${encodeURIComponent(queryStr.trim())}`;
+  }
+
+
+  function matchesFilters(item) {
+    // 1. State Filter
+    if (stateVal) {
+      const itemState = item.state || (item.isNonNyc ? '' : 'NY');
+      if (itemState !== stateVal) return false;
+    }
+
+    // 2. City / Borough Filter
+    if (cityVal) {
+      if (cityVal === 'NYC') {
+        if (item.isNonNyc) return false;
+      } else if (['MN', 'BK', 'QN', 'BX', 'SI'].includes(cityVal)) {
+        if (item.isNonNyc) return false;
+        const boroMap = { 'MN': 'MN', 'BX': 'BX', 'BK': 'BK', 'QN': 'QN', 'SI': 'SI', '1': 'MN', '2': 'BX', '3': 'BK', '4': 'QN', '5': 'SI' };
+        const boroCode = boroMap[cityVal];
+        const itemBoro = boroMap[String(item.borough || '').toUpperCase()] || String(item.borough || '').toUpperCase();
+        if (itemBoro !== boroCode) return false;
+      } else {
+        if (!item.isNonNyc) return false;
+        const itemCity = (item.city || '').toLowerCase();
+        if (itemCity !== cityVal.toLowerCase()) return false;
+      }
+    }
+
+    // 3. Property Type Filter
+    if (propType) {
+      const bc = (item.bldgclass || '').toUpperCase();
+      const lu = item.landuse || '';
+      
+      if (propType === 'office') {
+        const isOffice = bc.startsWith('O') || (lu === '05' && !bc.startsWith('K') && !bc.startsWith('H'));
+        if (!isOffice) return false;
+      } else if (propType === 'apartment') {
+        const isApt = bc.startsWith('C') || bc.startsWith('D') || lu === '02' || lu === '03';
+        if (!isApt) return false;
+      } else if (propType === 'shopping_center') {
+        const isRetail = bc.startsWith('K') || lu === '04' || bc.startsWith('J');
+        if (!isRetail) return false;
+      } else if (propType === 'vacant') {
+        const isVacant = bc.startsWith('V') || lu === '10';
+        if (!isVacant) return false;
+      }
+    }
+
+    // 4. Square Footage Filter
+    const sqft = parseFloat(item.bldgarea) || 0;
+    if (sqft < sqftMinVal || sqft > sqftMaxVal) return false;
+
+    // 5. Price Filter
+    const assesstot = parseFloat(item.assesstot) || 0;
+    const estPrice = assesstot * estMarketMultiplier;
+    if (estPrice < priceMinVal || estPrice > priceMaxVal) return false;
+
+    // 6. Zoning Type Filter
+    if (zoningType) {
+      const zd = (item.zonedist1 || '').toUpperCase();
+      const sp = (item.spdist1 || '').toUpperCase();
+      if (zoningType === 'commercial') {
+        const isComm = zd.startsWith('C') || zd.startsWith('DX') || zd.startsWith('B') || zd.startsWith('CS');
+        if (!isComm) return false;
+      } else if (zoningType === 'residential') {
+        const isRes = zd.startsWith('R');
+        if (!isRes) return false;
+      } else if (zoningType === 'manufacturing') {
+        const isMfg = zd.startsWith('M') && !zd.startsWith('MU');
+        if (!isMfg) return false;
+      } else if (zoningType === 'mixed-use') {
+        const isMixed = zd.includes('MX') || zd.startsWith('MU') || sp === 'MSMX' || zd.includes('MSMX');
+        if (!isMixed) return false;
+      }
+    }
+
+    return true;
+  }
+
+  let results = [];
+  
+  // Decide whether to query live Socrata PLUTO API (only for NYC state/city selections)
+  const querySocrata = (stateVal === '' || stateVal === 'NY') && 
+                       (cityVal === '' || cityVal === 'NYC' || ['MN', 'BK', 'QN', 'BX', 'SI'].includes(cityVal));
+
+  if (querySocrata) {
+    try {
+      let whereClauses = [];
+
+      if (cityVal && cityVal !== 'NYC') {
+        const boroMap = { 'MN': 'MN', 'BX': 'BX', 'BK': 'BK', 'QN': 'QN', 'SI': 'SI' };
+        const boroCode = boroMap[cityVal];
+        if (boroCode) {
+          whereClauses.push(`borough='${boroCode}'`);
+        }
+      }
+
+      if (propType) {
+        if (propType === 'office') {
+          whereClauses.push("(bldgclass like 'O%' or landuse='05')");
+        } else if (propType === 'apartment') {
+          whereClauses.push("(bldgclass like 'C%' or bldgclass like 'D%' or landuse in('02','03'))");
+        } else if (propType === 'shopping_center') {
+          whereClauses.push("(bldgclass like 'K%' or landuse='04' or bldgclass like 'J%')");
+        } else if (propType === 'vacant') {
+          whereClauses.push("(bldgclass like 'V%' or landuse='10')");
+        }
+      }
+
+      if (priceMinVal > 0) {
+        whereClauses.push(`assesstot >= ${Math.round(priceMinVal / estMarketMultiplier)}`);
+      }
+      if (priceMaxVal < Infinity) {
+        whereClauses.push(`assesstot <= ${Math.round(priceMaxVal / estMarketMultiplier)}`);
+      }
+
+      if (sqftMinVal > 0) {
+        whereClauses.push(`bldgarea >= ${sqftMinVal}`);
+      }
+      if (sqftMaxVal < Infinity) {
+        whereClauses.push(`bldgarea <= ${sqftMaxVal}`);
+      }
+
+      if (zoningType) {
+        if (zoningType === 'commercial') {
+          whereClauses.push("(zonedist1 like 'C%' or zonedist2 like 'C%')");
+        } else if (zoningType === 'residential') {
+          whereClauses.push("(zonedist1 like 'R%' or zonedist2 like 'R%')");
+        } else if (zoningType === 'manufacturing') {
+          whereClauses.push("(zonedist1 like 'M%' or zonedist2 like 'M%')");
+        } else if (zoningType === 'mixed-use') {
+          whereClauses.push("(spdist1='MSMX' or zonedist1 like '%MX%' or zonedist2 like '%MX%' or zonedist1 like '%MSMX%' or zonedist2 like '%MSMX%')");
+        }
+      }
+
+      whereClauses.push("latitude is not null and longitude is not null");
+
+      const whereQuery = whereClauses.length > 0 ? `&$where=${encodeURIComponent(whereClauses.join(' AND '))}` : '';
+      const plutoQueryUrl = `https://data.cityofnewyork.us/resource/64uk-42ks.json?$limit=30${whereQuery}`;
+      
+      const response = await fetch(plutoQueryUrl);
+      if (response.ok) {
+        results = await response.json();
+      } else {
+        console.warn("Live PLUTO filter query failed, using local database");
+      }
+    } catch (err) {
+      console.warn("Live filter query failed, using local database", err);
+    }
+  }
+
+  const mockMatches = Object.values(MOCK_PROPERTIES).filter(matchesFilters);
+  const mergedResults = [...mockMatches];
+  const seenBBLs = new Set(mergedResults.map(r => String(r.bbl)));
+  
+  results.forEach(res => {
+    const bblStr = String(res.bbl);
+    if (!seenBBLs.has(bblStr)) {
+      seenBBLs.add(bblStr);
+      mergedResults.push(res);
+    }
+  });
+
+  function updateExternalLinks() {
+    const extDbLinks = document.getElementById('external-db-links');
+    if (!extDbLinks) return;
+
+    const links = {
+      'link-crexi': getCrexiSearchUrl(stateVal, cityVal, propType, priceMinVal, priceMaxVal, sqftMinVal, sqftMaxVal),
+      'link-loopnet': getLoopNetSearchUrl(stateVal, cityVal, propType, priceMinVal, priceMaxVal, sqftMinVal, sqftMaxVal),
+      'link-costar': 'https://www.costar.com',
+      'link-zillow': getZillowSearchUrl(stateVal, cityVal, propType, priceMinVal, priceMaxVal, sqftMinVal, sqftMaxVal),
+      'link-redfin': getRedfinSearchUrl(stateVal, cityVal, propType, priceMinVal, priceMaxVal, sqftMinVal, sqftMaxVal),
+      'link-realtor': getRealtorSearchUrl(stateVal, cityVal, propType, priceMinVal, priceMaxVal, sqftMinVal, sqftMaxVal),
+      'link-cbre': getBrokerSearchUrl('cbre', stateVal, cityVal, propType),
+      'link-jll': getBrokerSearchUrl('jll', stateVal, cityVal, propType),
+      'link-cushman': getBrokerSearchUrl('cushman', stateVal, cityVal, propType),
+      'link-colliers': getBrokerSearchUrl('colliers', stateVal, cityVal, propType),
+      'link-marcus': getBrokerSearchUrl('marcus', stateVal, cityVal, propType),
+      'link-newmark': getBrokerSearchUrl('newmark', stateVal, cityVal, propType)
+    };
+
+    for (const [id, url] of Object.entries(links)) {
+      const el = document.getElementById(id);
+      if (el) {
+        el.href = url;
+      }
+    }
+    extDbLinks.style.display = 'block';
+  }
+
+  if (mergedResults.length === 0) {
+    // Still update external links so they can search on other platforms
+    updateExternalLinks();
+
+    propertiesResultsList.innerHTML = `
+      <div style="text-align: center; padding: 20px; color: var(--text-muted); font-size: 13px; width: 100%;">
+        No properties match the selected criteria.
+      </div>
+    `;
+    return;
+  }
+
+  function formatPriceCompact(val) {
+    if (val === null || val === undefined || isNaN(val) || val === 0) return 'Est. Price N/A';
+    if (val >= 1e9) {
+      return '$' + (val / 1e9).toFixed(1) + 'B';
+    }
+    if (val >= 1e6) {
+      return '$' + (val / 1e6).toFixed(1) + 'M';
+    }
+    return '$' + Math.round(val).toLocaleString();
+  }
+
+  // Update and reveal external database search links
+  updateExternalLinks();
+
+  propertiesResultsList.innerHTML = '';
+  mergedResults.slice(0, 40).forEach(prop => {
+    const bblStr = String(prop.bbl);
+    const card = document.createElement('div');
+    card.className = 'property-result-card';
+    card.dataset.bbl = bblStr;
+
+    const address = prop.address ? prop.address.trim() : `BBL ${bblStr}`;
+    const boroughName = prop.isNonNyc ? (prop.city || 'Non-NYC') : (getBoroughNameByCode(prop.borough) || 'NYC');
+    const area = parseFloat(prop.bldgarea) || 0;
+    const areaStr = area > 0 ? `${area.toLocaleString()} SF` : 'N/A';
+    
+    const assesstot = parseFloat(prop.assesstot) || 0;
+    const estPrice = assesstot * estMarketMultiplier;
+    const priceStr = estPrice > 0 ? formatPriceCompact(estPrice) : 'Est. Price N/A';
+
+    let typeLabel = 'Property';
+    const bc = (prop.bldgclass || '').toUpperCase();
+    const lu = prop.landuse || '';
+    const sp = prop.spdist1 || '';
+    const zd = prop.zonedist1 || '';
+    
+    if (bc.startsWith('O') || (lu === '05' && !bc.startsWith('K') && !bc.startsWith('H'))) {
+      typeLabel = (sp === 'MSMX' || zd.includes('MSMX')) ? '🏢 Office (MSMX)' : '🏢 Office';
+    } else if (bc.startsWith('K') || lu === '04' || bc.startsWith('J')) {
+      typeLabel = '🛍️ Shopping Center';
+    } else if (bc.startsWith('C') || bc.startsWith('D') || lu === '02' || lu === '03') {
+      typeLabel = '🏘️ Apartment';
+    } else if (bc.startsWith('V') || lu === '10') {
+      typeLabel = '🪵 Vacant Land';
+    } else if (bc.startsWith('H')) {
+      typeLabel = '🏨 Hotel';
+    }
+
+    const source = prop.source || "NYC OpenData";
+
+    card.innerHTML = `
+      <div class="result-card-header">
+        <div class="result-address">${address}</div>
+        <span class="source-badge badge-${source.toLowerCase().replace(/\s+/g, '')}">${source}</span>
+      </div>
+      <div class="result-details">
+        <span>${typeLabel}</span> • 
+        <span>📍 ${boroughName}</span> • 
+        <span>📐 ${areaStr}</span>
+      </div>
+      <div class="result-price">Est. Value: ${priceStr}</div>
+    `;
+
+    card.addEventListener('click', () => {
+      const lat = parseFloat(prop.latitude);
+      const lon = parseFloat(prop.longitude);
+      loadSite(bblStr, null, address, lat, lon, prop);
+    });
+
+    propertiesResultsList.appendChild(card);
+  });
+}
+
+function getBoroughNameByCode(code) {
+  const codes = {
+    'MN': 'Manhattan', '1': 'Manhattan',
+    'BX': 'Bronx', '2': 'Bronx',
+    'BK': 'Brooklyn', '3': 'Brooklyn',
+    'QN': 'Queens', '4': 'Queens',
+    'SI': 'Staten Island', '5': 'Staten Island'
+  };
+  return codes[String(code).toUpperCase()] || code;
+}
+
+if (propertiesSearchBtn) {
+  propertiesSearchBtn.addEventListener('click', executePropertiesSearch);
+}
+
 // Search Autocomplete Handlers
 let searchTimeout;
 searchInput.addEventListener('input', (e) => {
@@ -560,26 +1275,297 @@ const MOCK_PROPERTIES = {
   "1017230017": {
     bbl: "1017230017",
     borough: "MN", block: "1723", lot: "17",
-    address: "35 WEST 125TH STREET",
+    address: "35 WEST 125TH STREET", zipcode: "10027",
     zonedist1: "C4-7", spdist1: "125th", splitzone: false,
     lotarea: "11990", bldgarea: "166023", builtfar: "13.85",
     residfar: "10.00", commfar: "10.00", facilfar: "10.00", affresfar: "12.00",
     numfloors: "21", yearbuilt: "2025",
     latitude: "40.8073159", longitude: "-73.9436739",
-    lotfront: "120.0", lotdepth: "99.9", landmark: null
+    lotfront: "120.0", lotdepth: "99.9", landmark: null,
+    assesstot: "1987000", bldgclass: "D1", landuse: "03"
   },
   "1008350041": {
     bbl: "1008350041",
     borough: "MN", block: "835", lot: "41",
-    address: "350 FIFTH AVENUE",
+    address: "350 FIFTH AVENUE", zipcode: "10118",
     zonedist1: "C5-3", zonedist2: "C6-4.5", spdist1: "MiD", splitzone: true,
     lotarea: "91351", bldgarea: "2812739", builtfar: "30.79",
     residfar: "10.00", commfar: "15.00", facilfar: "15.00", affresfar: "12.00",
     numfloors: "102", yearbuilt: "1931",
     latitude: "40.7484514", longitude: "-73.9857117",
-    lotfront: "197.5", lotdepth: "500.0", landmark: "INDIVIDUAL AND INTERIOR LANDMARK"
+    lotfront: "197.5", lotdepth: "500.0", landmark: "INDIVIDUAL AND INTERIOR LANDMARK",
+    assesstot: "450000000", bldgclass: "O1", landuse: "05"
+  },
+  "1008610050": {
+    bbl: "1008610050",
+    borough: "MN", block: "861", lot: "50",
+    address: "150 MADISON AVENUE", zipcode: "10016",
+    zonedist1: "C5-2", spdist1: "MSMX", splitzone: false,
+    lotarea: "12000", bldgarea: "110000", builtfar: "9.17",
+    residfar: "10.00", commfar: "10.00", facilfar: "10.00", affresfar: "12.00",
+    numfloors: "12", yearbuilt: "1912",
+    latitude: "40.7468", longitude: "-73.9841",
+    lotfront: "100.0", lotdepth: "120.0", landmark: null,
+    assesstot: "18000000", bldgclass: "O1", landuse: "05"
+  },
+  "3012100001": {
+    bbl: "3012100001",
+    borough: "BK", block: "1210", lot: "1",
+    address: "1200 ATLANTIC AVENUE", zipcode: "11216",
+    zonedist1: "C4-5D", spdist1: null, splitzone: false,
+    lotarea: "8500", bldgarea: "12500", builtfar: "1.47",
+    residfar: "3.44", commfar: "3.4", facilfar: "4.0", affresfar: "0.0",
+    numfloors: "2", yearbuilt: "1950",
+    latitude: "40.6782", longitude: "-73.9504",
+    lotfront: "85.0", lotdepth: "100.0", landmark: null,
+    assesstot: "1800000", bldgclass: "K1", landuse: "05"
+  },
+  "4022000050": {
+    bbl: "4022000050",
+    borough: "QN", block: "2200", lot: "50",
+    address: "100 GATEWAY DRIVE", zipcode: "11367",
+    zonedist1: "M1-1", spdist1: null, splitzone: false,
+    lotarea: "45000", bldgarea: "0", builtfar: "0.0",
+    residfar: "0.0", commfar: "1.0", facilfar: "2.4", affresfar: "0.0",
+    numfloors: "0", yearbuilt: "N/A",
+    latitude: "40.7212", longitude: "-73.8152",
+    lotfront: "200.0", lotdepth: "225.0", landmark: null,
+    assesstot: "900000", bldgclass: "V1", landuse: "10"
+  },
+  "1012740025": {
+    bbl: "1012740025",
+    borough: "MN", block: "1274", lot: "25",
+    address: "768 FIFTH AVENUE", zipcode: "10019",
+    zonedist1: "R10", spdist1: null, splitzone: false,
+    lotarea: "56250", bldgarea: "980000", builtfar: "17.42",
+    residfar: "10.00", commfar: "0.0", facilfar: "10.00", affresfar: "12.00",
+    numfloors: "19", yearbuilt: "1907",
+    latitude: "40.7644", longitude: "-73.9744",
+    lotfront: "200.0", lotdepth: "281.0", landmark: "INDIVIDUAL LANDMARK",
+    assesstot: "120000000", bldgclass: "H1", landuse: "05"
+  },
+  "2024430100": {
+    bbl: "2024430100",
+    borough: "BX", block: "2443", lot: "100",
+    address: "500 GRAND CONCOURSE", zipcode: "10451",
+    zonedist1: "C4-4", spdist1: null, splitzone: false,
+    lotarea: "15000", bldgarea: "45000", builtfar: "3.0",
+    residfar: "3.44", commfar: "3.4", facilfar: "4.0", affresfar: "0.0",
+    numfloors: "5", yearbuilt: "1928",
+    latitude: "40.8178", longitude: "-73.9242",
+    lotfront: "150.0", lotdepth: "100.0", landmark: null,
+    assesstot: "3200000", bldgclass: "K4", landuse: "04"
+  },
+  "SF0001": {
+    bbl: "SF0001",
+    borough: "OTHER", block: "0001", lot: "1",
+    address: "100 PINE STREET, SAN FRANCISCO, CA", zipcode: "94111",
+    zonedist1: "C-3-O", spdist1: null, splitzone: false,
+    lotarea: "20000", bldgarea: "250000", builtfar: "12.5",
+    residfar: "9.0", commfar: "12.5", facilfar: "0.0", affresfar: "0.0",
+    numfloors: "33", yearbuilt: "1972",
+    latitude: "37.7925", longitude: "-122.3998",
+    lotfront: "100.0", lotdepth: "200.0", landmark: null,
+    assesstot: "42750000", bldgclass: "O1", landuse: "05",
+    city: "San Francisco", state: "CA", isNonNyc: true
+  },
+  "SF0002": {
+    bbl: "SF0002",
+    borough: "OTHER", block: "0001", lot: "5",
+    address: "555 MISSION STREET, SAN FRANCISCO, CA", zipcode: "94105",
+    zonedist1: "C-3-O", spdist1: null, splitzone: false,
+    lotarea: "30000", bldgarea: "350000", builtfar: "11.6",
+    residfar: "9.0", commfar: "12.0", facilfar: "0.0", affresfar: "0.0",
+    numfloors: "33", yearbuilt: "2008",
+    latitude: "37.7892", longitude: "-122.3999",
+    lotfront: "150.0", lotdepth: "200.0", landmark: null,
+    assesstot: "65000000", bldgclass: "D1", landuse: "02",
+    city: "San Francisco", state: "CA", isNonNyc: true
+  },
+  "LA0001": {
+    bbl: "LA0001",
+    borough: "OTHER", block: "0002", lot: "1",
+    address: "10250 SANTA MONICA BLVD, LOS ANGELES, CA", zipcode: "90067",
+    zonedist1: "C2", spdist1: null, splitzone: false,
+    lotarea: "50000", bldgarea: "0", builtfar: "0.0",
+    residfar: "0.0", commfar: "6.0", facilfar: "0.0", affresfar: "0.0",
+    numfloors: "0", yearbuilt: "N/A",
+    latitude: "34.0592", longitude: "-118.4204",
+    lotfront: "200.0", lotdepth: "250.0", landmark: null,
+    assesstot: "8000000", bldgclass: "V1", landuse: "10",
+    city: "Los Angeles", state: "CA", isNonNyc: true
+  },
+  "BOS001": {
+    bbl: "BOS001",
+    borough: "OTHER", block: "0001", lot: "2",
+    address: "800 BOYLSTON STREET, BOSTON, MA", zipcode: "02199",
+    zonedist1: "B-2", spdist1: null, splitzone: false,
+    lotarea: "150000", bldgarea: "1200000", builtfar: "8.0",
+    residfar: "0.0", commfar: "8.0", facilfar: "8.0", affresfar: "0.0",
+    numfloors: "52", yearbuilt: "1964",
+    latitude: "42.3472", longitude: "-71.0825",
+    lotfront: "300.0", lotdepth: "500.0", landmark: null,
+    assesstot: "202500000", bldgclass: "O2", landuse: "05",
+    city: "Boston", state: "MA", isNonNyc: true
+  },
+  "BOS002": {
+    bbl: "BOS002",
+    borough: "OTHER", block: "0001", lot: "6",
+    address: "100 SEAPORT BLVD, BOSTON, MA", zipcode: "02210",
+    zonedist1: "M-2", spdist1: null, splitzone: false,
+    lotarea: "45000", bldgarea: "0", builtfar: "0.0",
+    residfar: "0.0", commfar: "4.0", facilfar: "4.0", affresfar: "0.0",
+    numfloors: "0", yearbuilt: "N/A",
+    latitude: "42.3518", longitude: "-71.0425",
+    lotfront: "150.0", lotdepth: "300.0", landmark: null,
+    assesstot: "7000000", bldgclass: "V1", landuse: "10",
+    city: "Boston", state: "MA", isNonNyc: true
+  },
+  "CHI001": {
+    bbl: "CHI001",
+    borough: "OTHER", block: "0001", lot: "3",
+    address: "111 SOUTH WACKER DRIVE, CHICAGO, IL", zipcode: "60606",
+    zonedist1: "DX-16", spdist1: null, splitzone: false,
+    lotarea: "35000", bldgarea: "1000000", builtfar: "28.57",
+    residfar: "16.0", commfar: "16.0", facilfar: "16.0", affresfar: "0.0",
+    numfloors: "51", yearbuilt: "2005",
+    latitude: "41.8797", longitude: "-87.6369",
+    lotfront: "175.0", lotdepth: "200.0", landmark: null,
+    assesstot: "144000000", bldgclass: "O1", landuse: "05",
+    city: "Chicago", state: "IL", isNonNyc: true
+  },
+  "CHI002": {
+    bbl: "CHI002",
+    borough: "OTHER", block: "0001", lot: "7",
+    address: "730 N MICHIGAN AVE, CHICAGO, IL", zipcode: "60611",
+    zonedist1: "DX-12", spdist1: null, splitzone: false,
+    lotarea: "35000", bldgarea: "220000", builtfar: "6.2",
+    residfar: "12.0", commfar: "12.0", facilfar: "12.0", affresfar: "0.0",
+    numfloors: "25", yearbuilt: "1998",
+    latitude: "41.8962", longitude: "-87.6241",
+    lotfront: "150.0", lotdepth: "233.0", landmark: null,
+    assesstot: "12500000", bldgclass: "D1", landuse: "02",
+    city: "Chicago", state: "IL", isNonNyc: true
+  },
+  "AUS001": {
+    bbl: "AUS001",
+    borough: "OTHER", block: "0001", lot: "4",
+    address: "1500 VACANT LAND WAY, AUSTIN, TX", zipcode: "78701",
+    zonedist1: "CS", spdist1: null, splitzone: false,
+    lotarea: "200000", bldgarea: "0", builtfar: "0.0",
+    residfar: "0.0", commfar: "2.0", facilfar: "0.0", affresfar: "0.0",
+    numfloors: "0", yearbuilt: "N/A",
+    latitude: "30.2672", longitude: "-97.7431",
+    lotfront: "400.0", lotdepth: "500.0", landmark: null,
+    assesstot: "2025000", bldgclass: "V1", landuse: "10",
+    city: "Austin", state: "TX", isNonNyc: true
+  },
+  "AUS002": {
+    bbl: "AUS002",
+    borough: "OTHER", block: "0001", lot: "8",
+    address: "300 CONGRESS AVE, AUSTIN, TX", zipcode: "78701",
+    zonedist1: "CS", spdist1: null, splitzone: false,
+    lotarea: "40000", bldgarea: "180000", builtfar: "4.5",
+    residfar: "8.0", commfar: "8.0", facilfar: "0.0", affresfar: "0.0",
+    numfloors: "12", yearbuilt: "2015",
+    latitude: "30.2642", longitude: "-97.7441",
+    lotfront: "160.0", lotdepth: "250.0", landmark: null,
+    assesstot: "6000000", bldgclass: "D1", landuse: "02",
+    city: "Austin", state: "TX", isNonNyc: true
+  },
+  "HOU001": {
+    bbl: "HOU001",
+    borough: "OTHER", block: "0003", lot: "1",
+    address: "5085 WESTHEIMER RD, HOUSTON, TX", zipcode: "77056",
+    zonedist1: "C1", spdist1: null, splitzone: false,
+    lotarea: "120000", bldgarea: "250000", builtfar: "2.08",
+    residfar: "0.0", commfar: "5.0", facilfar: "5.0", affresfar: "0.0",
+    numfloors: "3", yearbuilt: "1970",
+    latitude: "29.7397", longitude: "-95.4628",
+    lotfront: "400.0", lotdepth: "300.0", landmark: null,
+    assesstot: "14000000", bldgclass: "K4", landuse: "04",
+    city: "Houston", state: "TX", isNonNyc: true
+  },
+  "MIA001": {
+    bbl: "MIA001",
+    borough: "OTHER", block: "0004", lot: "1",
+    address: "701 S MIAMI AVE, MIAMI, FL", zipcode: "33130",
+    zonedist1: "C3", spdist1: null, splitzone: false,
+    lotarea: "60000", bldgarea: "150000", builtfar: "2.5",
+    residfar: "4.0", commfar: "6.0", facilfar: "0.0", affresfar: "0.0",
+    numfloors: "4", yearbuilt: "2016",
+    latitude: "25.7675", longitude: "-80.1925",
+    lotfront: "200.0", lotdepth: "300.0", landmark: null,
+    assesstot: "9000000", bldgclass: "K4", landuse: "04",
+    city: "Miami", state: "FL", isNonNyc: true
+  },
+  "SEA001": {
+    bbl: "SEA001",
+    borough: "OTHER", block: "0005", lot: "1",
+    address: "1201 THIRD AVE, SEATTLE, WA", zipcode: "98101",
+    zonedist1: "C-3-O", spdist1: null, splitzone: false,
+    lotarea: "50000", bldgarea: "1100000", builtfar: "22.0",
+    residfar: "10.0", commfar: "15.0", facilfar: "0.0", affresfar: "0.0",
+    numfloors: "55", yearbuilt: "1988",
+    latitude: "47.6074", longitude: "-122.3364",
+    lotfront: "200.0", lotdepth: "250.0", landmark: null,
+    assesstot: "85000000", bldgclass: "O1", landuse: "05",
+    city: "Seattle", state: "WA", isNonNyc: true
+  },
+  "DEN001": {
+    bbl: "DEN001",
+    borough: "OTHER", block: "0006", lot: "1",
+    address: "1700 WYNKOOP STREET, DENVER, CO", zipcode: "80202",
+    zonedist1: "MU-Generic", spdist1: null, splitzone: false,
+    lotarea: "30000", bldgarea: "0", builtfar: "0.0",
+    residfar: "4.0", commfar: "4.0", facilfar: "4.0", affresfar: "0.0",
+    numfloors: "0", yearbuilt: "N/A",
+    latitude: "39.7531", longitude: "-104.9998",
+    lotfront: "150.0", lotdepth: "200.0", landmark: null,
+    assesstot: "3000000", bldgclass: "V1", landuse: "10",
+    city: "Denver", state: "CO", isNonNyc: true
+  },
+  "1007550040": {
+    bbl: "1007550040",
+    borough: "MN", block: "755", lot: "40",
+    address: "200 EAST 34TH STREET, NEW YORK, NY", zipcode: "10016",
+    zonedist1: "C5-3", spdist1: null, splitzone: false,
+    lotarea: "15000", bldgarea: "0", builtfar: "0.0",
+    residfar: "10.0", commfar: "15.0", facilfar: "15.0", affresfar: "12.0",
+    numfloors: "0", yearbuilt: "N/A",
+    latitude: "40.7456", longitude: "-73.9782",
+    lotfront: "150.0", lotdepth: "100.0", landmark: null,
+    assesstot: "2000000", bldgclass: "V1", landuse: "10"
+  },
+  "3001200010": {
+    bbl: "3001200010",
+    borough: "BK", block: "120", lot: "10",
+    address: "45 GLENMORE AVENUE, BROOKLYN, NY", zipcode: "11212",
+    zonedist1: "R8", spdist1: null, splitzone: false,
+    lotarea: "25000", bldgarea: "40000", builtfar: "1.6",
+    residfar: "6.02", commfar: "0.0", facilfar: "6.5", affresfar: "0.0",
+    numfloors: "4", yearbuilt: "1960",
+    latitude: "40.6698", longitude: "-73.9056",
+    lotfront: "250.0", lotdepth: "100.0", landmark: null,
+    assesstot: "3500000", bldgclass: "D1", landuse: "02"
+  },
+  "4010200030": {
+    bbl: "4010200030",
+    borough: "QN", block: "1020", lot: "30",
+    address: "90-15 QUEENS BLVD, QUEENS, NY", zipcode: "11373",
+    zonedist1: "C4-2", spdist1: null, splitzone: false,
+    lotarea: "80000", bldgarea: "120000", builtfar: "1.5",
+    residfar: "2.43", commfar: "3.4", facilfar: "4.8", affresfar: "0.0",
+    numfloors: "2", yearbuilt: "1975",
+    latitude: "40.7345", longitude: "-73.8698",
   }
 };
+
+// Programmatically distribute mock properties to different sources to simulate database sources
+Object.keys(MOCK_PROPERTIES).forEach((key, idx) => {
+  const sources = ["Crexi", "LoopNet", "CoStar"];
+  MOCK_PROPERTIES[key].source = sources[idx % sources.length];
+});
 
 // Load and query zoning data for BBL
 function loadSite(bbl, bin = null, addressName = null, inputLat = null, inputLon = null, geojsonProps = null) {
@@ -655,7 +1641,7 @@ function loadSite(bbl, bin = null, addressName = null, inputLat = null, inputLon
   }
 
   dataPromise
-  .then(([plutoRows, footprintRows, zapBblRows]) => {
+  .then(async ([plutoRows, footprintRows, zapBblRows]) => {
     let lat = inputLat;
     let lon = inputLon;
 
@@ -714,11 +1700,18 @@ function loadSite(bbl, bin = null, addressName = null, inputLat = null, inputLon
       };
     } else {
       plutoData = plutoRows[0];
-      plutoData.city = "New York";
-      plutoData.state = "NY";
-      plutoData.isNonNyc = false;
+      if (plutoData.isNonNyc === undefined) {
+        plutoData.isNonNyc = false;
+      }
+      if (!plutoData.city) {
+        plutoData.city = "New York";
+      }
+      if (!plutoData.state) {
+        plutoData.state = "NY";
+      }
     }
     footprintsData = footprintRows;
+    window.plutoData = plutoData;
 
     const bblStr = String(bbl).split('.')[0];
     const lotArea = parseInt(plutoData.lotarea, 10) || 0;
@@ -727,6 +1720,21 @@ function loadSite(bbl, bin = null, addressName = null, inputLat = null, inputLon
     };
     activeUnderwritingAssumptions = initAssumptions(bblStr, lotArea, zoningRules);
     
+    // Fetch live comps using NYC Open Data
+    if (plutoData.zipcode && !plutoData.isNonNyc) {
+      const compsResult = await fetchLiveLandComps(plutoData.zipcode, activeUnderwritingAssumptions.landCostSf);
+      if (compsResult && compsResult.averagePricePerBsf) {
+        activeUnderwritingAssumptions.landCostSf = compsResult.averagePricePerBsf;
+        window.latestCompsResult = compsResult.comps; // Store for potential UI use
+      }
+    }
+    
+    const displayAddress = addressName || plutoData.address || `${plutoData.block || ''} Block, ${plutoData.lot || ''} Lot`;
+    
+    if (searchInput) {
+      searchInput.value = displayAddress;
+    }
+
     // Initialize activeUnderwritingData
     if (bblStr === "1017230017") {
       activeUnderwritingData = JSON.parse(JSON.stringify(financialData));
@@ -735,7 +1743,6 @@ function loadSite(bbl, bin = null, addressName = null, inputLat = null, inputLon
         ...activeUnderwritingAssumptions
       };
     } else {
-      const displayAddress = addressName || plutoData.address || `${plutoData.block} Block, ${plutoData.lot} Lot`;
       activeUnderwritingData = estimateFinancials(lotArea, zoningRules, displayAddress, bblStr, activeUnderwritingAssumptions);
     }
     isCustomized = false;
@@ -1495,6 +2502,14 @@ function syncInteractionFields() {
           address: matchingLog.address
         };
       }
+    } else if (val.startsWith('global|')) {
+      const parts = val.split('|');
+      const emailOrName = parts[1];
+      const globalContacts = getGlobalContactsData();
+      selectedContact = globalContacts.find(c => {
+        const name = [c.firstName, c.lastName].filter(Boolean).join(' ').trim();
+        return (name && name === emailOrName) || c.email === emailOrName;
+      });
     }
 
     const roleVal = selectedContact?.role || 'other';
@@ -1507,24 +2522,27 @@ function syncInteractionFields() {
     // Populate Role
     populateSelectWithOptions(roleSelect, CONTACT_ROLES, roleVal);
 
+    // Combine saved contacts and global contacts to populate the dropdowns
+    const allContactsForOptions = [...savedContacts, ...getGlobalContactsData()];
+
     // Populate Company (contact's company, plus all other saved companies, plus custom)
-    const companyOptions = getUniqueOptionsForField(savedContacts, 'company', companyVal);
+    const companyOptions = getUniqueOptionsForField(allContactsForOptions, 'company', companyVal);
     populateSelectWithOptions(companySelect, companyOptions, companyVal || 'none');
 
     // Populate Work Phone
-    const workPhoneOptions = getUniqueOptionsForField(savedContacts, 'workPhone', workPhoneVal);
+    const workPhoneOptions = getUniqueOptionsForField(allContactsForOptions, 'workPhone', workPhoneVal);
     populateSelectWithOptions(workPhoneSelect, workPhoneOptions, workPhoneVal || 'none');
 
     // Populate Cell Phone
-    const cellPhoneOptions = getUniqueOptionsForField(savedContacts, 'cellPhone', cellPhoneVal);
+    const cellPhoneOptions = getUniqueOptionsForField(allContactsForOptions, 'cellPhone', cellPhoneVal);
     populateSelectWithOptions(cellPhoneSelect, cellPhoneOptions, cellPhoneVal || 'none');
 
     // Populate Email
-    const emailOptions = getUniqueOptionsForField(savedContacts, 'email', emailVal);
+    const emailOptions = getUniqueOptionsForField(allContactsForOptions, 'email', emailVal);
     populateSelectWithOptions(emailSelect, emailOptions, emailVal || 'none');
 
     // Populate Address
-    const addressOptions = getUniqueOptionsForField(savedContacts, 'address', addressVal);
+    const addressOptions = getUniqueOptionsForField(allContactsForOptions, 'address', addressVal);
     populateSelectWithOptions(addressSelect, addressOptions, addressVal || 'none');
 
     // Toggle custom containers based on initial select values
@@ -1662,6 +2680,131 @@ function savePropertyContactsData(data) {
   }
 }
 
+const GLOBAL_CONTACTS_KEY = 'sitepro_global_contacts';
+
+function getGlobalContactsData() {
+  try {
+    const data = localStorage.getItem(GLOBAL_CONTACTS_KEY);
+    if (data) {
+      return JSON.parse(data);
+    }
+  } catch (e) {
+    console.error('Error reading global contacts data:', e);
+  }
+  return [];
+}
+
+function saveGlobalContactsData(data) {
+  try {
+    localStorage.setItem(GLOBAL_CONTACTS_KEY, JSON.stringify(data));
+  } catch (e) {
+    console.error('Error saving global contacts data:', e);
+  }
+}
+
+
+// Render Comparable Sales Tab Content
+function renderCompsTab() {
+  const displayAddress = currentAddressName || plutoData.address || `${plutoData.block} Block, ${plutoData.lot} Lot`;
+  const lotArea = parseInt(plutoData.lotarea, 10) || 0;
+  const builtArea = parseInt(plutoData.bldgarea, 10) || 0;
+
+  let compsData = [];
+  let isLiveData = false;
+
+  if (window.latestCompsResult && window.latestCompsResult.length > 0) {
+    isLiveData = true;
+    compsData = window.latestCompsResult.map(c => ({
+      address: c.address,
+      price: `$${Math.round(c.salePrice).toLocaleString()}`,
+      date: c.saleDate,
+      sqft: Math.round(c.maxBsf),
+      ppsf: `$${Math.round(c.pricePerBsf).toLocaleString()}`,
+      type: c.category ? c.category.substring(0, 15) : "Land"
+    }));
+  } else {
+    // Mock comparable sales data fallback
+    compsData = [
+      { address: "123 Main St", price: "$2,450,000", date: "2023-10-15", sqft: 2500, ppsf: "$980", type: "Multifamily" },
+      { address: "456 Elm St", price: "$1,850,000", date: "2023-09-22", sqft: 1800, ppsf: "$1,027", type: "Mixed-Use" },
+      { address: "789 Oak Ave", price: "$3,100,000", date: "2023-11-05", sqft: 3200, ppsf: "$968", type: "Multifamily" },
+      { address: "321 Pine Rd", price: "$950,000", date: "2023-08-30", sqft: 1100, ppsf: "$863", type: "Commercial" },
+      { address: "654 Maple Dr", price: "$4,200,000", date: "2023-12-12", sqft: 4500, ppsf: "$933", type: "Multifamily" }
+    ];
+  }
+
+  let compsRows = compsData.map(comp => `
+    <div style="display: grid; grid-template-columns: 2fr 1fr 1fr 1fr 1fr 1fr; gap: 8px; padding: 12px 8px; border-bottom: 1px solid rgba(255, 255, 255, 0.05); align-items: center; font-size: 11px;">
+      <div style="font-weight: 500; color: #fff;">${comp.address}</div>
+      <div style="color: var(--accent-green); font-weight: 600;">${comp.price}</div>
+      <div style="color: var(--text-muted);">${comp.date}</div>
+      <div style="text-align: right;">${comp.sqft.toLocaleString()} sf</div>
+      <div style="text-align: right; color: var(--accent-cyan);">${comp.ppsf}</div>
+      <div style="text-align: center;"><span style="background: rgba(255,255,255,0.1); padding: 2px 6px; border-radius: 4px; font-size: 10px;">${comp.type}</span></div>
+    </div>
+  `).join('');
+
+  reportPanel.innerHTML = `
+    <div class="welcome-screen" style="align-items: flex-start; text-align: left;">
+      <h3 style="margin-bottom: 5px; color: #fff; font-size: 18px;">Comparable Sales ${isLiveData ? '<span style="font-size:10px; background:var(--accent-cyan); color:#000; padding:2px 6px; border-radius:4px; vertical-align:middle; margin-left:8px;">LIVE DATA</span>' : ''}</h3>
+      <div style="font-size: 12px; color: var(--text-secondary); margin-bottom: 20px;">
+        Recent transactions near <strong style="color: var(--accent-cyan);">${displayAddress}</strong>
+      </div>
+      
+      <!-- Property Summary -->
+      <div style="display: flex; gap: 15px; margin-bottom: 24px; width: 100%;">
+        <div style="flex: 1; background: rgba(255, 255, 255, 0.03); border: 1px solid var(--border-color); border-radius: 8px; padding: 12px;">
+          <div style="font-size: 10px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px;">Target Lot Area</div>
+          <div style="font-size: 18px; font-weight: 600; color: #fff; margin-top: 4px;">${lotArea.toLocaleString()} <span style="font-size: 12px; color: var(--text-secondary);">sf</span></div>
+        </div>
+        <div style="flex: 1; background: rgba(255, 255, 255, 0.03); border: 1px solid var(--border-color); border-radius: 8px; padding: 12px;">
+          <div style="font-size: 10px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px;">Target Built Area</div>
+          <div style="font-size: 18px; font-weight: 600; color: #fff; margin-top: 4px;">${builtArea.toLocaleString()} <span style="font-size: 12px; color: var(--text-secondary);">sf</span></div>
+        </div>
+      </div>
+
+      <!-- Filters (Mock) -->
+      <div style="display: flex; gap: 10px; margin-bottom: 16px; width: 100%;">
+        <select class="contacts-input" style="flex: 1; height: 32px; font-size: 11px;">
+          <option>0.5 Mile Radius</option>
+          <option>1.0 Mile Radius</option>
+          <option>Zip Code</option>
+        </select>
+        <select class="contacts-input" style="flex: 1; height: 32px; font-size: 11px;">
+          <option>All Property Types</option>
+          <option>Multifamily</option>
+          <option>Mixed-Use</option>
+          <option>Commercial</option>
+        </select>
+        <select class="contacts-input" style="flex: 1; height: 32px; font-size: 11px;">
+          <option>Last 12 Months</option>
+          <option>Last 6 Months</option>
+          <option>Last 24 Months</option>
+        </select>
+        <button class="control-btn active" style="padding: 0 16px; font-size: 11px;">Filter</button>
+      </div>
+
+      <!-- Comps Table -->
+      <div style="width: 100%; background: rgba(0,0,0,0.2); border: 1px solid var(--border-color); border-radius: 8px; overflow: hidden;">
+        <div style="display: grid; grid-template-columns: 2fr 1fr 1fr 1fr 1fr 1fr; gap: 8px; padding: 10px 8px; background: rgba(255,255,255,0.05); font-size: 10px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid var(--border-color);">
+          <div>Address</div>
+          <div>Sale Price</div>
+          <div>Date</div>
+          <div style="text-align: right;">${isLiveData ? 'Max BSF' : 'Bldg SqFt'}</div>
+          <div style="text-align: right;">${isLiveData ? 'Price/BSF' : 'Price/SqFt'}</div>
+          <div style="text-align: center;">Type</div>
+        </div>
+        <div style="max-height: 400px; overflow-y: auto;">
+          ${compsRows}
+        </div>
+      </div>
+      
+      <div style="width: 100%; display: flex; justify-content: flex-end; margin-top: 16px;">
+         <button class="control-btn" style="font-size: 11px;">⬇ Export CSV</button>
+      </div>
+    </div>
+  `;
+}
 
 // Render Contact Logs & Details Tab Content
 function renderContactsTab() {
@@ -1754,6 +2897,15 @@ function renderContactsTab() {
     const displayLabel = fullName ? `${fullName} (${displayRole})` : `Unnamed (${displayRole})`;
     const val = `saved|${fullName || 'Unnamed'}|${contact.role}`;
     return `<option value="${val}">${displayLabel}</option>`;
+  }).join('');
+
+  // Format global (Gmail) contacts as options
+  const globalContacts = getGlobalContactsData();
+  const globalOptions = globalContacts.map(contact => {
+    const fullName = [contact.firstName, contact.lastName].filter(Boolean).join(' ').trim();
+    const displayLabel = fullName ? `${fullName} (Gmail Contact)` : `${contact.email} (Gmail Contact)`;
+    const val = `global|${fullName || contact.email}|other`;
+    return `<option value="${val}">📧 ${displayLabel}</option>`;
   }).join('');
 
   // Build the Contact History HTML
@@ -1886,7 +3038,10 @@ function renderContactsTab() {
           <span>Contact Logs & History</span>
           <span style="font-size: 10px; color: var(--text-muted); display: block; margin-top: 4px; font-weight: normal;">${displayAddress}</span>
         </div>
-        <button id="open-contacts-modal-btn" class="control-btn" style="padding: 6px 12px; font-size: 11px; height: auto;">Manage Contacts</button>
+        <div style="display: flex; gap: 8px;">
+          <button id="import-gmail-btn" class="control-btn" style="padding: 6px 12px; font-size: 11px; height: auto; border-color: var(--accent-magenta); color: var(--accent-magenta); background: transparent;">Import from Gmail</button>
+          <button id="open-contacts-modal-btn" class="control-btn" style="padding: 6px 12px; font-size: 11px; height: auto;">Manage Contacts</button>
+        </div>
       </div>
 
       <!-- Contact Info Modal -->
@@ -1926,6 +3081,7 @@ function renderContactsTab() {
                 <label class="contacts-form-label">Who Spoke With? (Contact)</label>
                 <select id="log-spoke-with" class="contacts-input" style="height: 34px;">
                   ${savedOptions}
+                  ${globalOptions}
                   ${loggedOptions}
                   <option value="other">Other / Custom Name...</option>
                 </select>
@@ -2047,6 +3203,13 @@ function renderContactsTab() {
     });
   }
 
+  const importGmailBtn = document.getElementById('import-gmail-btn');
+  if (importGmailBtn) {
+    importGmailBtn.addEventListener('click', () => {
+      importFromGmail();
+    });
+  }
+
   if (closeModalBtn && modalOverlay) {
     closeModalBtn.addEventListener('click', () => {
       modalOverlay.classList.remove('active');
@@ -2099,6 +3262,15 @@ function renderActiveTab() {
       }, 100);
     }
     renderContactsTab();
+  } else if (activeTab === 'comps') {
+    if (appContainer) {
+      appContainer.classList.remove('full-width-financials');
+      setTimeout(() => {
+        window.dispatchEvent(new Event('resize'));
+        if (map) map.invalidateSize();
+      }, 100);
+    }
+    renderCompsTab();
   } else {
     if (appContainer) {
       appContainer.classList.add('full-width-financials');
@@ -4171,3 +5343,139 @@ window.addEventListener('beforeprint', () => {
 // Automatically load the default verified lot on startup
 loadSite("1017230017", null, "33-35 W 125th St");
 
+// --- Google People API Integration ---
+const GOOGLE_CLIENT_ID = 'YOUR_GOOGLE_CLIENT_ID';
+let tokenClient;
+let gapiInited = false;
+
+// Initialize gapi client
+function initGapiClient() {
+  gapi.client.init({
+    discoveryDocs: ['https://www.googleapis.com/discovery/v1/apis/people/v1/rest'],
+  }).then(() => {
+    gapiInited = true;
+  }).catch((err) => {
+    console.error('Error initializing gapi client:', err);
+  });
+}
+
+// Load gapi script when it's ready
+if (typeof gapi !== 'undefined') {
+  gapi.load('client', initGapiClient);
+} else {
+  // If gapi hasn't loaded yet, try adding an interval to check
+  const gapiInterval = setInterval(() => {
+    if (typeof gapi !== 'undefined') {
+      gapi.load('client', initGapiClient);
+      clearInterval(gapiInterval);
+    }
+  }, 500);
+}
+
+window.importFromGmail = function() {
+  if (GOOGLE_CLIENT_ID === 'YOUR_GOOGLE_CLIENT_ID') {
+    alert('Please configure your Google OAuth Client ID in main.js to use this feature.');
+    return;
+  }
+
+  if (!gapiInited) {
+    alert('Google API is still loading. Please try again in a few seconds.');
+    return;
+  }
+
+  // Initialize the Token Client (Identity Services)
+  tokenClient = google.accounts.oauth2.initTokenClient({
+    client_id: GOOGLE_CLIENT_ID,
+    scope: 'https://www.googleapis.com/auth/contacts.readonly',
+    callback: (tokenResponse) => {
+      if (tokenResponse.error !== undefined) {
+        throw (tokenResponse);
+      }
+      fetchGoogleContacts();
+    },
+  });
+
+  // Trigger the OAuth consent screen
+  tokenClient.requestAccessToken({ prompt: 'consent' });
+};
+
+function fetchGoogleContacts() {
+  const btn = document.getElementById('import-gmail-btn');
+  if (btn) btn.innerText = 'Importing...';
+
+  gapi.client.people.people.connections.list({
+    'resourceName': 'people/me',
+    'pageSize': 500,
+    'personFields': 'names,emailAddresses,phoneNumbers,organizations',
+  }).then((response) => {
+    const connections = response.result.connections;
+    let importedCount = 0;
+    
+    if (connections && connections.length > 0) {
+      const globalContacts = getGlobalContactsData();
+      const currentPropertyContacts = getPropertyContactsData();
+      if (!currentPropertyContacts.contacts) currentPropertyContacts.contacts = [];
+
+      connections.forEach((person) => {
+        const nameObj = person.names && person.names.length > 0 ? person.names[0] : null;
+        const emailObj = person.emailAddresses && person.emailAddresses.length > 0 ? person.emailAddresses[0] : null;
+        const phoneObj = person.phoneNumbers && person.phoneNumbers.length > 0 ? person.phoneNumbers[0] : null;
+        const orgObj = person.organizations && person.organizations.length > 0 ? person.organizations[0] : null;
+
+        const email = emailObj ? emailObj.value : '';
+        const firstName = nameObj ? nameObj.givenName : '';
+        const lastName = nameObj ? nameObj.familyName : '';
+        const company = orgObj ? orgObj.name : '';
+        const phone = phoneObj ? phoneObj.value : '';
+
+        // If contact doesn't have a name or email, skip
+        if (!email && !firstName && !lastName) return;
+
+        const newContact = {
+          googleContactId: person.resourceName,
+          firstName: firstName || '',
+          lastName: lastName || '',
+          email: email || '',
+          company: company || '',
+          workPhone: phone || '',
+          role: 'other' // default role
+        };
+
+        // Deduplication against global contacts (to keep track of all ever imported)
+        const isGlobalDup = globalContacts.some(c => 
+          (c.googleContactId && c.googleContactId === newContact.googleContactId) || 
+          (c.email && newContact.email && c.email.toLowerCase() === newContact.email.toLowerCase())
+        );
+
+        if (!isGlobalDup) {
+          globalContacts.push(newContact);
+        }
+
+        // Deduplication against current property contacts
+        const isPropDup = currentPropertyContacts.contacts.some(c => 
+          (c.googleContactId && c.googleContactId === newContact.googleContactId) || 
+          (c.email && newContact.email && c.email.toLowerCase() === newContact.email.toLowerCase())
+        );
+
+        if (!isPropDup) {
+          currentPropertyContacts.contacts.push(newContact);
+          importedCount++;
+        }
+      });
+
+      // Save updated lists
+      saveGlobalContactsData(globalContacts);
+      savePropertyContactsData(currentPropertyContacts);
+      
+      alert(`Successfully imported ${importedCount} new contacts from Gmail.`);
+      renderContactsTab(); // refresh UI
+    } else {
+      alert('No contacts found in your Google account.');
+    }
+  }).catch((err) => {
+    console.error('Error fetching Google Contacts:', err);
+    alert('An error occurred while fetching contacts.');
+  }).finally(() => {
+    if (btn) btn.innerText = 'Import from Gmail';
+  });
+}

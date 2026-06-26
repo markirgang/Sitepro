@@ -75,15 +75,25 @@ export function getZoningRules(district, overlay = "") {
 
   const upperDistrict = district.trim().toUpperCase();
   
+  // Try to find custom FAR values if we are querying a non-NYC property
+  let customFarObj = null;
+  if (typeof window !== 'undefined' && window.plutoData) {
+    const pData = window.plutoData;
+    const distMatch = (pData.zonedist1 || '').trim().toUpperCase() === upperDistrict;
+    if (distMatch && pData.isNonNyc) {
+      customFarObj = pData;
+    }
+  }
+
   const isNycFormat = /^[RCM][0-9]/.test(upperDistrict);
   if (!isNycFormat || upperDistrict.includes('GENERIC') || upperDistrict.includes('NON-NYC')) {
     return {
       district: upperDistrict,
       type: 'Mixed Use',
-      resFar: 2.50,
-      commFar: 2.00,
-      facilFar: 2.00,
-      mfgFar: 0,
+      resFar: customFarObj && customFarObj.residfar !== undefined ? parseFloat(customFarObj.residfar) : 2.50,
+      commFar: customFarObj && customFarObj.commfar !== undefined ? parseFloat(customFarObj.commfar) : 2.00,
+      facilFar: customFarObj && customFarObj.facilfar !== undefined ? parseFloat(customFarObj.facilfar) : 2.00,
+      mfgFar: customFarObj && customFarObj.mfgfar !== undefined ? parseFloat(customFarObj.mfgfar) : 0,
       contextual: true,
       baseHeight: 45,
       maxBuildingHeight: 75,
@@ -155,6 +165,13 @@ export function getZoningRules(district, overlay = "") {
       const rNum = parseInt(rMatch[1], 10);
       rules.commFar = rNum >= 6 ? 2.00 : 1.00;
     }
+  }
+
+  if (customFarObj) {
+    rules.resFar = customFarObj.residfar !== undefined ? parseFloat(customFarObj.residfar) : rules.resFar;
+    rules.commFar = customFarObj.commfar !== undefined ? parseFloat(customFarObj.commfar) : rules.commFar;
+    rules.facilFar = customFarObj.facilfar !== undefined ? parseFloat(customFarObj.facilfar) : rules.facilFar;
+    rules.mfgFar = customFarObj.mfgfar !== undefined ? parseFloat(customFarObj.mfgfar) : rules.mfgFar;
   }
 
   return rules;
